@@ -121,8 +121,16 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
 .danger{background:var(--bad);color:#fff}
 .primary:disabled{opacity:.45}
 .err{color:var(--bad);font-size:.85rem}
-.bset{display:grid;grid-template-columns:1fr 130px;gap:8px 10px;align-items:center}
-.bset label{font-weight:600}
+.bset{display:grid;grid-template-columns:minmax(0,1fr) 116px 40px;gap:8px 8px;align-items:center}
+.bset.inc{grid-template-columns:minmax(0,1fr) 40px}
+.bset label,.bset .cname{font-weight:600;min-width:0;overflow-wrap:anywhere}
+.rm{width:40px;height:40px;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--muted);font-size:1.1rem;display:grid;place-items:center}
+.rm:disabled{opacity:.35}
+.addcat{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px}
+.addcat input{border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:10px;padding:10px;font:inherit;font-size:16px;width:100%;min-width:0}
+.addcat button{border:0;background:var(--soft);color:var(--ink);font-weight:600;border-radius:10px;padding:0 16px}
+.sub{font-family:var(--display);font-weight:600;font-size:1rem;margin:4px 0 0}
+.chips .newchip{border-style:dashed;color:var(--accent);font-weight:600}
 .bset input{border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:10px;padding:10px;font:inherit;font-size:16px;text-align:right;width:100%}
 .stack{display:flex;flex-direction:column;gap:10px}
 .confirm{background:var(--soft);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:10px}
@@ -183,7 +191,9 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
       <button type="button" id="tInc" aria-pressed="false">Income</button>
     </div>
     <label class="amount" for="amt"><span>₱</span><input id="amt" inputmode="decimal" autocomplete="off" placeholder="0"></label>
-    <div class="field"><span class="label">Category</span><div class="chips" id="chips"></div></div>
+    <div class="field"><span class="label">Category</span><div class="chips" id="chips"></div>
+      <div class="addcat" id="quickCat" hidden><input id="quickCatName" maxlength="30" placeholder="New category name" autocomplete="off"><button type="button" id="quickCatAdd">Add</button></div>
+      <p class="err" id="quickCatErr" hidden></p></div>
     <div class="row2">
       <div class="field"><label class="label" for="note">Note</label><input id="note" placeholder="e.g. Jollibee lunch" maxlength="80"></div>
       <div class="field"><label class="label" for="date">Date</label><input id="date" type="date"></div>
@@ -196,10 +206,16 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
 <div class="sheet" id="budgetSheet" hidden role="dialog" aria-modal="true" aria-labelledby="bTitle">
   <form class="sheet-in" id="budgetForm" novalidate>
     <div class="grab"></div>
-    <h2 id="bTitle">Monthly budgets</h2>
-    <p class="muted">Leave a category blank if you only want to track it. These amounts apply to every month.</p>
+    <h2 id="bTitle">Categories &amp; budgets</h2>
+    <p class="muted">Set a monthly limit, or leave it blank to just track spending. Removing a category keeps its past entries.</p>
+    <h3 class="sub">Expenses</h3>
     <div class="bset" id="bset"></div>
-    <button class="primary" type="submit">Save budgets</button>
+    <div class="addcat"><input id="newExp" maxlength="30" placeholder="Add expense category, e.g. Baby" autocomplete="off"><button type="button" id="newExpBtn">Add</button></div>
+    <h3 class="sub">Income</h3>
+    <div class="bset inc" id="incset"></div>
+    <div class="addcat"><input id="newInc" maxlength="30" placeholder="Add income category, e.g. Rental" autocomplete="off"><button type="button" id="newIncBtn">Add</button></div>
+    <p class="err" id="catErr" hidden></p>
+    <button class="primary" type="submit">Save</button>
   </form>
 </div>
 
@@ -259,8 +275,22 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
 
 <script>
 (() => {
-  const EXP_CATS = ["Food","Groceries","Transport","Bills","Load & Internet","Health","Family","Shopping","Others"];
-  const INC_CATS = ["Salary","Client payment","Side income","Others"];
+  const DEF_EXP = ["Food","Groceries","Transport","Bills","Load & Internet","Health","Family","Shopping","Others"];
+  const DEF_INC = ["Salary","Client payment","Side income","Others"];
+  const MAX_CATS = 30;
+  // Category lists live inside the synced budgets object under reserved "__" keys.
+  const listOk = v => Array.isArray(v) && v.length && v.every(x => typeof x === "string");
+  const expCats = () => listOk(data.budgets.__exp) ? data.budgets.__exp : DEF_EXP;
+  const incCats = () => listOk(data.budgets.__inc) ? data.budgets.__inc : DEF_INC;
+  function cleanCat(raw, list){
+    const name = String(raw || "").trim().replace(/\s+/g, " ");
+    if (!name) return [null, "Type a category name."];
+    if (name.length > 30) return [null, "Keep the name under 30 characters."];
+    if (name.startsWith("__")) return [null, "Pick a different name."];
+    if (list.some(c => c.toLowerCase() === name.toLowerCase())) return [null, `"${name}" is already in the list.`];
+    if (list.length >= MAX_CATS) return [null, `You can have up to ${MAX_CATS} categories.`];
+    return [name, null];
+  }
   const KEY = "pitaka-v2", SETUP_KEY = "pitaka-setup", OLD_KEY = "pitaka-v1";
   const CFG = window.PITAKA_CONFIG || {};
   const CFG_OK = /^https:\/\/.+/.test(CFG.supabaseUrl || "") && (CFG.supabaseKey || "").length > 20 && !/YOUR/.test(CFG.supabaseUrl + CFG.supabaseKey);
@@ -406,7 +436,8 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
     // Budgets
     const spentBy = {};
     list.filter(t => t.type === "expense").forEach(t => spentBy[t.cat] = (spentBy[t.cat]||0) + t.amount);
-    const allCats = [...EXP_CATS, ...Object.keys(spentBy).filter(c => !EXP_CATS.includes(c))];
+    const ec = expCats();
+    const allCats = [...ec, ...Object.keys(spentBy).filter(c => !ec.includes(c))];
     const cats = allCats.filter(c => data.budgets[c] > 0 || spentBy[c] > 0);
     const bx = $("budgets"); bx.textContent = "";
     if (!cats.length){
@@ -484,7 +515,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
   let type = "expense", cat = "Food";
   function drawChips(){
     const c = $("chips"); c.textContent = "";
-    const cats = type === "expense" ? EXP_CATS : INC_CATS;
+    const cats = type === "expense" ? expCats() : incCats();
     if (!cats.includes(cat)) cat = cats[0];
     cats.forEach(name => {
       const b = el("button", null, name); b.type = "button";
@@ -492,14 +523,30 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
       b.onclick = () => { cat = name; drawChips(); };
       c.append(b);
     });
+    const nb = el("button", "newchip", "+ New"); nb.type = "button";
+    nb.onclick = () => { $("quickCat").hidden = false; $("quickCatErr").hidden = true; $("quickCatName").value = ""; $("quickCatName").focus(); };
+    c.append(nb);
     $("tExp").setAttribute("aria-pressed", String(type === "expense"));
     $("tInc").setAttribute("aria-pressed", String(type === "income"));
   }
-  $("tExp").onclick = () => { type = "expense"; drawChips(); };
-  $("tInc").onclick = () => { type = "income"; drawChips(); };
+  $("tExp").onclick = () => { type = "expense"; $("quickCat").hidden = true; drawChips(); };
+  $("tInc").onclick = () => { type = "income"; $("quickCat").hidden = true; drawChips(); };
+
+  function commitBudgets(b){ data.budgets = b; data.budgetsMtime = Date.now(); data.budgetsDirty = true; save(); render(); scheduleSync(); }
+  function quickAdd(){
+    const key = type === "income" ? "__inc" : "__exp";
+    const list = type === "income" ? incCats() : expCats();
+    const [name, msg] = cleanCat($("quickCatName").value, list);
+    if (!name){ $("quickCatErr").textContent = msg; $("quickCatErr").hidden = false; return; }
+    commitBudgets(Object.assign({}, data.budgets, { [key]: [...list, name] }));
+    cat = name; $("quickCat").hidden = true; $("quickCatErr").hidden = true; drawChips();
+    toast(`Added ${name}`);
+  }
+  $("quickCatAdd").onclick = quickAdd;
+  $("quickCatName").addEventListener("keydown", e => { if (e.key === "Enter"){ e.preventDefault(); quickAdd(); } });
 
   $("addBtn").onclick = () => {
-    type = "expense";
+    type = "expense"; $("quickCat").hidden = true; $("quickCatErr").hidden = true;
     $("amt").value = ""; $("note").value = "";
     $("date").value = view.month === today().slice(0,7) ? today() : view.month + "-01";
     $("addErr").hidden = true; drawChips(); show("addSheet");
@@ -521,22 +568,51 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
   });
 
   /* ---------- Budgets ---------- */
-  $("editBudgets").onclick = () => {
+  // Working copy while the sheet is open; nothing is saved until Save.
+  let work = null;
+  function readAmounts(){ $("bset").querySelectorAll("input").forEach(i => { work.amt[i.dataset.cat] = i.value; }); }
+  function drawBudgetSheet(){
     const box = $("bset"); box.textContent = "";
-    EXP_CATS.forEach((c,i) => {
+    work.exp.forEach((c, i) => {
       const l = el("label", null, c); l.htmlFor = "b" + i;
       const inp = document.createElement("input"); inp.id = "b" + i; inp.inputMode = "numeric"; inp.placeholder = "No limit";
-      inp.dataset.cat = c; inp.value = data.budgets[c] ? data.budgets[c] : "";
-      box.append(l, inp);
+      inp.dataset.cat = c; inp.value = work.amt[c] || "";
+      const rm = el("button", "rm", "✕"); rm.type = "button"; rm.setAttribute("aria-label", "Remove " + c);
+      rm.disabled = work.exp.length <= 1;
+      rm.onclick = () => { readAmounts(); work.exp = work.exp.filter(x => x !== c); drawBudgetSheet(); };
+      box.append(l, inp, rm);
     });
-    show("budgetSheet");
+    const ib = $("incset"); ib.textContent = "";
+    work.inc.forEach(c => {
+      const rm = el("button", "rm", "✕"); rm.type = "button"; rm.setAttribute("aria-label", "Remove " + c);
+      rm.disabled = work.inc.length <= 1;
+      rm.onclick = () => { readAmounts(); work.inc = work.inc.filter(x => x !== c); drawBudgetSheet(); };
+      ib.append(el("span", "cname", c), rm);
+    });
+  }
+  function addFromSheet(kind){
+    const input = kind === "inc" ? $("newInc") : $("newExp"), err = $("catErr");
+    const [name, msg] = cleanCat(input.value, work[kind]);
+    if (!name){ err.textContent = msg; err.hidden = false; return; }
+    err.hidden = true; readAmounts(); work[kind] = [...work[kind], name]; input.value = ""; drawBudgetSheet();
+  }
+  $("newExpBtn").onclick = () => addFromSheet("exp");
+  $("newIncBtn").onclick = () => addFromSheet("inc");
+  $("newExp").addEventListener("keydown", e => { if (e.key === "Enter"){ e.preventDefault(); addFromSheet("exp"); } });
+  $("newInc").addEventListener("keydown", e => { if (e.key === "Enter"){ e.preventDefault(); addFromSheet("inc"); } });
+
+  $("editBudgets").onclick = () => {
+    const amt = {}; Object.keys(data.budgets).forEach(k => { if (!k.startsWith("__")) amt[k] = String(data.budgets[k]); });
+    work = { exp: [...expCats()], inc: [...incCats()], amt };
+    $("newExp").value = ""; $("newInc").value = ""; $("catErr").hidden = true;
+    drawBudgetSheet(); show("budgetSheet");
   };
   $("budgetForm").addEventListener("submit", e => {
     e.preventDefault();
-    const b = {};
-    $("bset").querySelectorAll("input").forEach(i => { const v = parseFloat(i.value.replace(/[,₱\s]/g,"")); if (v > 0) b[i.dataset.cat] = Math.round(v); });
-    data.budgets = b; data.budgetsMtime = Date.now(); data.budgetsDirty = true;
-    save(); hide(); render(); scheduleSync(); toast("Budgets saved");
+    readAmounts();
+    const b = { __exp: work.exp, __inc: work.inc };
+    work.exp.forEach(c => { const v = parseFloat(String(work.amt[c] || "").replace(/[,₱\s]/g, "")); if (v > 0) b[c] = Math.round(v); });
+    commitBudgets(b); hide(); toast("Saved");
   });
 
   /* ---------- Household setup ---------- */
