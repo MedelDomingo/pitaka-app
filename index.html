@@ -130,6 +130,25 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
 .addcat input{border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:10px;padding:10px;font:inherit;font-size:16px;width:100%;min-width:0}
 .addcat button{border:0;background:var(--soft);color:var(--ink);font-weight:600;border-radius:10px;padding:0 16px}
 .sub{font-family:var(--display);font-weight:600;font-size:1rem;margin:4px 0 0}
+.cards{display:flex;flex-direction:column;gap:10px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:16px;overflow:hidden}
+.card-h{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 12px;padding:14px;width:100%;text-align:left;background:none;border:0;align-items:baseline}
+.card-h .cname{font-weight:700;min-width:0;overflow-wrap:anywhere}
+.card-h .ctotal{font-family:var(--display);font-weight:800;font-size:1.25rem;grid-row:1;grid-column:2}
+.card-h .cuse{font-size:.82rem;color:var(--muted);min-width:0;overflow-wrap:anywhere}
+.card-h .ccount{font-size:.82rem;color:var(--muted);grid-column:2;text-align:right}
+.citems{border-top:1px solid var(--line)}
+.citem{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 12px;padding:10px 14px;border-top:1px solid var(--line);font-size:.92rem}
+.citem:first-child{border-top:0}
+.citem .what{font-weight:600;min-width:0;overflow-wrap:anywhere}
+.citem .meta{grid-column:1;font-size:.8rem;color:var(--muted);min-width:0;overflow-wrap:anywhere}
+.citem .amt{grid-row:1;grid-column:2;font-weight:700}
+.citems .none{padding:12px 14px;color:var(--muted);font-size:.88rem}
+.payhint{font-size:.82rem;color:var(--muted);margin:0}
+.cardset{display:flex;flex-direction:column;gap:12px}
+.cardedit{display:grid;grid-template-columns:minmax(0,1fr) 40px;gap:8px;padding:12px;border:1px solid var(--line);border-radius:14px;background:var(--bg)}
+.cardedit input{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:10px;padding:10px;font:inherit;font-size:16px;width:100%;min-width:0}
+.cardedit .use{grid-column:1/-1}
 .chips .newchip{border-style:dashed;color:var(--accent);font-weight:600}
 .bset input{border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:10px;padding:10px;font:inherit;font-size:16px;text-align:right;width:100%}
 .stack{display:flex;flex-direction:column;gap:10px}
@@ -173,6 +192,11 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
   </section>
 
   <section>
+    <div class="sec-h"><h2>Credit cards</h2><button class="link" id="manageCards">Manage cards</button></div>
+    <div class="cards" id="cards"></div>
+  </section>
+
+  <section>
     <div class="sec-h"><h2>Transactions</h2><span class="label" id="count"></span></div>
     <div id="ledger"></div>
   </section>
@@ -194,6 +218,10 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
     <div class="field"><span class="label">Category</span><div class="chips" id="chips"></div>
       <div class="addcat" id="quickCat" hidden><input id="quickCatName" maxlength="30" placeholder="New category name" autocomplete="off"><button type="button" id="quickCatAdd">Add</button></div>
       <p class="err" id="quickCatErr" hidden></p></div>
+    <div class="field" id="payField"><span class="label">Paid with</span><div class="chips" id="payChips"></div>
+      <p class="payhint" id="payHint" hidden></p>
+      <div class="addcat" id="quickCard" hidden><input id="quickCardName" maxlength="30" placeholder="Card name, e.g. BPI Visa" autocomplete="off"><button type="button" id="quickCardAdd">Add</button></div>
+      <p class="err" id="quickCardErr" hidden></p></div>
     <div class="row2">
       <div class="field"><label class="label" for="note">Note</label><input id="note" placeholder="e.g. Jollibee lunch" maxlength="80"></div>
       <div class="field"><label class="label" for="date">Date</label><input id="date" type="date"></div>
@@ -215,6 +243,18 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
     <div class="bset inc" id="incset"></div>
     <div class="addcat"><input id="newInc" maxlength="30" placeholder="Add income category, e.g. Rental" autocomplete="off"><button type="button" id="newIncBtn">Add</button></div>
     <p class="err" id="catErr" hidden></p>
+    <button class="primary" type="submit">Save</button>
+  </form>
+</div>
+
+<div class="sheet" id="cardSheet" hidden role="dialog" aria-modal="true" aria-labelledby="cTitle">
+  <form class="sheet-in" id="cardForm" novalidate>
+    <div class="grab"></div>
+    <h2 id="cTitle">Credit cards</h2>
+    <p class="muted">Name each card and what you use it for. Removing a card keeps its past entries.</p>
+    <div class="cardset" id="cardset"></div>
+    <button class="secondary" type="button" id="addCardRow">+ Add card</button>
+    <p class="err" id="cardErr" hidden></p>
     <button class="primary" type="submit">Save</button>
   </form>
 </div>
@@ -282,6 +322,10 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
   const listOk = v => Array.isArray(v) && v.length && v.every(x => typeof x === "string");
   const expCats = () => listOk(data.budgets.__exp) ? data.budgets.__exp : DEF_EXP;
   const incCats = () => listOk(data.budgets.__inc) ? data.budgets.__inc : DEF_INC;
+  const MAX_CARDS = 12;
+  const cardsList = () => Array.isArray(data.budgets.__cards) ? data.budgets.__cards.filter(c => c && typeof c.id === "string" && typeof c.name === "string") : [];
+  const cardById = id => cardsList().find(c => c.id === id);
+  const isCardPay = t => t.type === "expense" && t.pay && t.pay !== "cash";
   function cleanCat(raw, list){
     const name = String(raw || "").trim().replace(/\s+/g, " ");
     if (!name) return [null, "Type a category name."];
@@ -460,6 +504,41 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
       bx.append(row);
     });
 
+    // Credit cards
+    const cardsEl = $("cards"); cardsEl.textContent = "";
+    const cards = cardsList();
+    const swipes = list.filter(isCardPay);
+    const groups = cards.map(c => ({ id: c.id, name: c.name, use: c.use || "", items: swipes.filter(t => t.pay === c.id) }));
+    const orphan = swipes.filter(t => !cardById(t.pay));
+    if (orphan.length) groups.push({ id: "__removed", name: "Removed card", use: "", items: orphan });
+    if (!groups.length){
+      const e = el("div", "empty");
+      const btn = el("button", "secondary", "Add a card"); btn.type = "button"; btn.style.marginTop = "12px"; btn.onclick = openCards;
+      e.append(el("strong", null, "No credit cards yet"), "Add your cards to see how much you swiped on each one this month.", el("br"), btn);
+      cardsEl.append(e);
+    }
+    groups.forEach(g => {
+      const total = g.items.reduce((s, t) => s + t.amount, 0);
+      const box = el("div", "card");
+      const h = el("button", "card-h"); h.type = "button"; h.setAttribute("aria-expanded", String(view.openCard === g.id));
+      h.append(el("span", "cname", g.name), el("span", "ctotal", peso(total)),
+               el("span", "cuse", g.use), el("span", "ccount", `${g.items.length} ${g.items.length === 1 ? "item" : "items"}`));
+      h.onclick = () => { view.openCard = view.openCard === g.id ? null : g.id; render(); };
+      box.append(h);
+      if (view.openCard === g.id){
+        const items = el("div", "citems");
+        if (!g.items.length) items.append(el("div", "none", "Nothing swiped on this card this month."));
+        [...g.items].sort((a,b) => b.date.localeCompare(a.date) || (b.ts||0) - (a.ts||0)).forEach(t => {
+          const r = el("div", "citem");
+          r.append(el("span", "what", t.note || t.cat), el("span", "amt", peso(t.amount)),
+                   el("span", "meta", [dayName(t.date), t.note ? t.cat : "", t.by].filter(Boolean).join(" · ")));
+          items.append(r);
+        });
+        box.append(items);
+      }
+      cardsEl.append(box);
+    });
+
     // Ledger
     const lg = $("ledger"); lg.textContent = "";
     $("count").textContent = list.length ? `${list.length} ${list.length === 1 ? "entry" : "entries"}` : "";
@@ -468,16 +547,17 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
       lg.append(e);
     } else {
       const sorted = [...list].sort((a,b) => b.date.localeCompare(a.date) || (b.ts||0) - (a.ts||0));
-      const groups = {};
-      sorted.forEach(t => (groups[t.date] = groups[t.date] || []).push(t));
-      Object.keys(groups).forEach(d => {
+      const byDay = {};
+      sorted.forEach(t => (byDay[t.date] = byDay[t.date] || []).push(t));
+      Object.keys(byDay).forEach(d => {
         const wrap = el("div", "day"), box = el("div", "list");
-        groups[d].forEach(t => {
+        byDay[d].forEach(t => {
           const row = el("div", "tx"); row.tabIndex = 0; row.setAttribute("role","button");
           row.append(el("span", "cat", t.cat), el("span", "val" + (t.type === "income" ? " in" : ""), (t.type === "income" ? "+" : "−") + peso(t.amount)));
-          if (t.note || t.by){
+          const extra = [t.by, isCardPay(t) ? (cardById(t.pay) || { name: "Removed card" }).name : ""].filter(Boolean).join(" · ");
+          if (t.note || extra){
             const n = el("span", "note", t.note || "");
-            if (t.by) n.append(el("span", "by", (t.note ? " · " : "") + t.by));
+            if (extra) n.append(el("span", "by", (t.note ? " · " : "") + extra));
             row.append(n);
           }
           if (view.openTx === t.id){
@@ -529,8 +609,48 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
     $("tExp").setAttribute("aria-pressed", String(type === "expense"));
     $("tInc").setAttribute("aria-pressed", String(type === "income"));
   }
-  $("tExp").onclick = () => { type = "expense"; $("quickCat").hidden = true; drawChips(); };
-  $("tInc").onclick = () => { type = "income"; $("quickCat").hidden = true; drawChips(); };
+  $("tExp").onclick = () => { type = "expense"; $("quickCat").hidden = true; drawChips(); drawPay(); };
+  $("tInc").onclick = () => { type = "income"; $("quickCat").hidden = true; drawChips(); drawPay(); };
+
+  let pay = "cash";
+  function drawPay(){
+    $("payField").hidden = type !== "expense";
+    const c = $("payChips"); c.textContent = "";
+    const cards = cardsList();
+    if (pay !== "cash" && !cards.some(x => x.id === pay)) pay = "cash";
+    [{ id: "cash", name: "Cash" }, ...cards].forEach(o => {
+      const b = el("button", null, o.name); b.type = "button";
+      b.setAttribute("aria-pressed", String(o.id === pay));
+      b.onclick = () => { pay = o.id; drawPay(); };
+      c.append(b);
+    });
+    const nb = el("button", "newchip", "+ Card"); nb.type = "button";
+    nb.onclick = () => { $("quickCard").hidden = false; $("quickCardErr").hidden = true; $("quickCardName").value = ""; $("quickCardName").focus(); };
+    c.append(nb);
+    const sel = cards.find(x => x.id === pay);
+    $("payHint").hidden = !(sel && sel.use);
+    if (sel && sel.use) $("payHint").textContent = "Used for: " + sel.use;
+  }
+  function cleanCardName(raw, cards, selfId){
+    const name = String(raw || "").trim().replace(/\s+/g, " ");
+    if (!name) return [null, "Type a card name."];
+    if (name.length > 30) return [null, "Keep the card name under 30 characters."];
+    if (name.toLowerCase() === "cash") return [null, "Pick a different name."];
+    if (cards.some(c => c.id !== selfId && c.name.toLowerCase() === name.toLowerCase())) return [null, `"${name}" is already in your cards.`];
+    return [name, null];
+  }
+  function quickCard(){
+    const cards = cardsList();
+    if (cards.length >= MAX_CARDS){ $("quickCardErr").textContent = `You can have up to ${MAX_CARDS} cards.`; $("quickCardErr").hidden = false; return; }
+    const [name, msg] = cleanCardName($("quickCardName").value, cards);
+    if (!name){ $("quickCardErr").textContent = msg; $("quickCardErr").hidden = false; return; }
+    const card = { id: newId(), name, use: "" };
+    commitBudgets(Object.assign({}, data.budgets, { __cards: [...cards, card] }));
+    pay = card.id; $("quickCard").hidden = true; $("quickCardErr").hidden = true; drawPay();
+    toast(`Added ${name}`);
+  }
+  $("quickCardAdd").onclick = quickCard;
+  $("quickCardName").addEventListener("keydown", e => { if (e.key === "Enter"){ e.preventDefault(); quickCard(); } });
 
   function commitBudgets(b){ data.budgets = b; data.budgetsMtime = Date.now(); data.budgetsDirty = true; save(); render(); scheduleSync(); }
   function quickAdd(){
@@ -549,7 +669,8 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
     type = "expense"; $("quickCat").hidden = true; $("quickCatErr").hidden = true;
     $("amt").value = ""; $("note").value = "";
     $("date").value = view.month === today().slice(0,7) ? today() : view.month + "-01";
-    $("addErr").hidden = true; drawChips(); show("addSheet");
+    pay = "cash"; $("quickCard").hidden = true; $("quickCardErr").hidden = true;
+    $("addErr").hidden = true; drawChips(); drawPay(); show("addSheet");
     setTimeout(() => $("amt").focus(), 60);
   };
 
@@ -560,11 +681,12 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
     if (!(amount > 0)){ err.textContent = "Enter an amount greater than zero."; err.hidden = false; return; }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)){ err.textContent = "Pick a date."; err.hidden = false; return; }
     const now = Date.now();
-    const t = { id: newId(), type, amount, cat, note: $("note").value.trim(), date, ts: now, by: setup.name || "", mtime: now, deleted: 0 };
+    const t = { id: newId(), type, amount, cat, note: $("note").value.trim(), date, ts: now, by: setup.name || "", pay: type === "expense" ? pay : "", mtime: now, deleted: 0 };
     data.tx[t.id] = t; markPending(t.id);
     if (!save()){ delete data.tx[t.id]; data.pending = data.pending.filter(x => x !== t.id); return; }
     hide(); view.month = date.slice(0,7); render(); scheduleSync();
-    toast(type === "expense" ? `Logged ${peso(amount)} for ${cat}` : `Added ${peso(amount)} income`);
+    const card = type === "expense" && cardById(pay);
+    toast(type === "expense" ? `Logged ${peso(amount)} for ${cat}${card ? " on " + card.name : ""}` : `Added ${peso(amount)} income`);
   });
 
   /* ---------- Budgets ---------- */
@@ -610,9 +732,56 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
   $("budgetForm").addEventListener("submit", e => {
     e.preventDefault();
     readAmounts();
-    const b = { __exp: work.exp, __inc: work.inc };
+    const b = {};
+    Object.keys(data.budgets).forEach(k => { if (k.startsWith("__")) b[k] = data.budgets[k]; });
+    b.__exp = work.exp; b.__inc = work.inc;
     work.exp.forEach(c => { const v = parseFloat(String(work.amt[c] || "").replace(/[,₱\s]/g, "")); if (v > 0) b[c] = Math.round(v); });
     commitBudgets(b); hide(); toast("Saved");
+  });
+
+  /* ---------- Credit cards ---------- */
+  let cardWork = null;
+  function readCards(){
+    $("cardset").querySelectorAll(".cardedit").forEach(r => {
+      const c = cardWork.find(x => x.id === r.dataset.id);
+      if (c){ c.name = r.querySelector(".nm").value; c.use = r.querySelector(".use").value; }
+    });
+  }
+  function drawCardSheet(){
+    const box = $("cardset"); box.textContent = "";
+    if (!cardWork.length) box.append(el("p", "muted", "No cards yet. Tap Add card to start."));
+    cardWork.forEach((c, i) => {
+      const r = el("div", "cardedit"); r.dataset.id = c.id;
+      const nm = document.createElement("input"); nm.className = "nm"; nm.id = "cn" + i; nm.maxLength = 30; nm.placeholder = "Card name, e.g. BPI Visa"; nm.value = c.name || ""; nm.setAttribute("aria-label", "Card name");
+      const use = document.createElement("input"); use.className = "use"; use.id = "cu" + i; use.maxLength = 40; use.placeholder = "Used for, e.g. Groceries"; use.value = c.use || ""; use.setAttribute("aria-label", "What this card is for");
+      const rm = el("button", "rm", "✕"); rm.type = "button"; rm.setAttribute("aria-label", "Remove " + (c.name || "card"));
+      rm.onclick = () => { readCards(); cardWork = cardWork.filter(x => x.id !== c.id); drawCardSheet(); };
+      r.append(nm, rm, use); box.append(r);
+    });
+  }
+  function openCards(){
+    cardWork = cardsList().map(c => ({ id: c.id, name: c.name, use: c.use || "" }));
+    if (!cardWork.length) cardWork.push({ id: newId(), name: "", use: "" });
+    $("cardErr").hidden = true; drawCardSheet(); show("cardSheet");
+  }
+  $("manageCards").onclick = openCards;
+  $("addCardRow").onclick = () => {
+    readCards();
+    if (cardWork.length >= MAX_CARDS){ $("cardErr").textContent = `You can have up to ${MAX_CARDS} cards.`; $("cardErr").hidden = false; return; }
+    cardWork.push({ id: newId(), name: "", use: "" }); drawCardSheet();
+    const ins = $("cardset").querySelectorAll(".nm"); ins[ins.length - 1].focus();
+  };
+  $("cardForm").addEventListener("submit", e => {
+    e.preventDefault(); readCards();
+    const out = [], err = $("cardErr");
+    for (const c of cardWork){
+      if (!String(c.name).trim() && !String(c.use).trim()) continue;
+      const [name, msg] = cleanCardName(c.name, out, c.id);
+      if (!name){ err.textContent = msg; err.hidden = false; return; }
+      out.push({ id: c.id, name, use: String(c.use).trim().slice(0, 40) });
+    }
+    commitBudgets(Object.assign({}, data.budgets, { __cards: out }));
+    hide(); toast("Cards saved");
   });
 
   /* ---------- Household setup ---------- */
@@ -720,7 +889,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
     const now = Date.now();
     pendingImport.tx.forEach(t => {
       const id = /^[a-z0-9]{6,40}$/.test(t.id || "") ? t.id : newId();
-      data.tx[id] = { id, type: t.type, amount: t.amount, cat: String(t.cat || "Others"), note: String(t.note || ""), date: t.date, ts: t.ts || now, by: t.by || setup.name || "", mtime: now, deleted: 0 };
+      data.tx[id] = { id, type: t.type, amount: t.amount, cat: String(t.cat || "Others"), note: String(t.note || ""), date: t.date, ts: t.ts || now, by: t.by || setup.name || "", pay: String(t.pay || ""), mtime: now, deleted: 0 };
       markPending(id);
     });
     if (pendingImport.budgets && !Object.keys(data.budgets).length) { data.budgets = pendingImport.budgets; data.budgetsMtime = now; data.budgetsDirty = true; }

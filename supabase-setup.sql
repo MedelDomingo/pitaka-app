@@ -29,6 +29,9 @@ create table if not exists public.pitaka_tx (
 );
 create index if not exists pitaka_tx_updated on public.pitaka_tx (household_id, updated_at);
 
+-- Added for payment methods (cash or a credit card id). Safe on existing data.
+alter table public.pitaka_tx add column if not exists pay text not null default '';
+
 create table if not exists public.pitaka_settings (
   household_id bigint not null references public.pitaka_households(id) on delete cascade,
   k text not null,
@@ -78,7 +81,7 @@ begin
       continue when (c->>'amount')::numeric <= 0 or (c->>'amount')::numeric >= 1e10;
       continue when jsonb_typeof(c->'mtime') is distinct from 'number' or (c->>'mtime')::numeric <= 0;
 
-      insert into pitaka_tx as t (household_id, id, type, amount, cat, note, date, ts, by_name, mtime, deleted, updated_at)
+      insert into pitaka_tx as t (household_id, id, type, amount, cat, note, date, ts, by_name, pay, mtime, deleted, updated_at)
       values (
         hid, c->>'id', c->>'type', round((c->>'amount')::numeric, 2),
         left(coalesce(nullif(trim(c->>'cat'), ''), 'Others'), 40),
@@ -86,6 +89,7 @@ begin
         c->>'date',
         case when jsonb_typeof(c->'ts') = 'number' then (c->>'ts')::numeric::bigint else (c->>'mtime')::numeric::bigint end,
         left(trim(coalesce(c->>'by', '')), 40),
+        left(coalesce(c->>'pay', ''), 40),
         (c->>'mtime')::numeric::bigint,
         coalesce(c->'deleted' in ('true'::jsonb, '1'::jsonb), false),
         now_ms
@@ -93,14 +97,16 @@ begin
       on conflict (household_id, id) do update set
         type = excluded.type, amount = excluded.amount, cat = excluded.cat, note = excluded.note,
         date = excluded.date, ts = excluded.ts, by_name = excluded.by_name, mtime = excluded.mtime,
-        deleted = excluded.deleted, updated_at = excluded.updated_at
+        deleted = excluded.deleted, updated_at = excluded.updated_at,
+        -- older app versions don't send pay; keep what's stored
+        pay = case when c ? 'pay' then excluded.pay else t.pay end
       where t.mtime <= excluded.mtime;   -- newer edit wins
     end loop;
   end if;
 
   if jsonb_typeof(p_budgets) = 'object'
      and jsonb_typeof(p_budgets->'v') = 'object'
-     and length((p_budgets->'v')::text) < 4000
+     and length((p_budgets->'v')::text) < 20000
      and jsonb_typeof(p_budgets->'mtime') = 'number' then
     insert into pitaka_settings as s (household_id, k, v, mtime, updated_at)
     values (hid, 'budgets', p_budgets->'v', (p_budgets->>'mtime')::numeric::bigint, now_ms)
@@ -112,6 +118,7 @@ begin
   select coalesce(jsonb_agg(jsonb_build_object(
            'id', t.id, 'type', t.type, 'amount', t.amount, 'cat', t.cat, 'note', t.note,
            'date', t.date, 'ts', t.ts, 'by', t.by_name, 'mtime', t.mtime,
+           'pay', t.pay,
            'deleted', case when t.deleted then 1 else 0 end) order by t.updated_at), '[]'::jsonb)
     into res_tx
     from pitaka_tx t
