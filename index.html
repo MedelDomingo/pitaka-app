@@ -1,0 +1,674 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pitaka Budget</title>
+<meta name="description" content="Shared household peso budget tracker.">
+<meta name="theme-color" content="#0E7A5C">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icons/favicon-32.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Pitaka">
+<script src="config.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: single phone column, passbook-style ledger, floating add button, bottom sheets for input */
+:root{
+  --bg:#EEF2EF; --surface:#FFFFFF; --ink:#16241F; --muted:#5E6E68; --line:#D6DFDA;
+  --accent:#0E7A5C; --accent-ink:#FFFFFF; --soft:#DCEDE5; --warn:#B7791F; --bad:#C2412D;
+  --display:"Bricolage Grotesque", "Figtree", system-ui, sans-serif;
+  --body:"Figtree", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color-scheme:light;
+  padding-top:env(safe-area-inset-top,0px);
+}
+@media (prefers-color-scheme: dark){:root{
+  --bg:#0F1714; --surface:#17221E; --ink:#E6EEEA; --muted:#93A59D; --line:#2A3833;
+  --accent:#3FBF94; --accent-ink:#0B1310; --soft:#1D3229; --warn:#E3A84A; --bad:#F07560; color-scheme:dark}}
+
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html{background:var(--bg)}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.45;
+  padding-left:max(16px, env(safe-area-inset-left,0px));padding-right:max(16px, env(safe-area-inset-right,0px));
+  padding-block:12px calc(120px + env(safe-area-inset-bottom,0px));
+  font-variant-numeric:tabular-nums;-webkit-tap-highlight-color:transparent;overscroll-behavior-y:none}
+.wrap{max-width:520px;margin:0 auto;display:flex;flex-direction:column;gap:22px}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.month{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.month h1{font-family:var(--display);font-weight:600;font-size:1.05rem;margin:0;letter-spacing:.01em;text-align:center;flex:1}
+.iconbtn{width:40px;height:40px;border-radius:12px;border:1px solid var(--line);background:var(--surface);display:grid;place-items:center;font-size:1.1rem;flex:none}
+.month .right{display:flex;gap:8px}
+
+.balance{display:flex;flex-direction:column;gap:6px}
+.label{font-size:.72rem;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);font-weight:600}
+.big{font-family:var(--display);font-weight:800;font-size:clamp(2.4rem,11vw,3.3rem);line-height:1;letter-spacing:-.02em;margin:0}
+.big.neg{color:var(--bad)}
+.split{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+.split div{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:10px 12px}
+.split strong{display:block;font-size:1.1rem;font-weight:700}
+.split .in strong{color:var(--accent)}
+
+.notice{font-size:.84rem;color:var(--ink);background:var(--soft);border-radius:12px;padding:10px 12px;margin:0;display:flex;gap:10px;align-items:center;justify-content:space-between}
+.notice button{flex:none;border:0;background:var(--accent);color:var(--accent-ink);border-radius:9px;padding:7px 12px;font-weight:600;font-size:.82rem}
+
+.sec-h{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:10px}
+.sec-h h2{font-family:var(--display);font-weight:600;font-size:1.15rem;margin:0}
+.link{background:none;border:0;color:var(--accent);font-weight:600;padding:4px 0}
+
+.budgets{display:flex;flex-direction:column;gap:12px;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:14px}
+.brow{display:grid;grid-template-columns:1fr auto;gap:4px 10px;align-items:baseline}
+.brow .name{font-weight:600;min-width:0}
+.brow .amt{font-size:.88rem;color:var(--muted)}
+.brow .amt b{color:var(--ink);font-weight:600}
+.bar{grid-column:1/-1;height:7px;border-radius:99px;background:var(--line);overflow:hidden}
+.bar i{display:block;height:100%;border-radius:99px;background:var(--accent)}
+.bar i.warn{background:var(--warn)} .bar i.bad{background:var(--bad)}
+.brow .hint{grid-column:1/-1;font-size:.78rem;color:var(--muted)}
+.brow .hint.bad{color:var(--bad);font-weight:600}
+
+.day{margin-bottom:14px}
+.day h3{font-size:.78rem;font-weight:600;color:var(--muted);margin:0 0 6px;text-transform:uppercase;letter-spacing:.07em}
+.list{background:var(--surface);border:1px solid var(--line);border-radius:16px;overflow:hidden}
+.tx{display:grid;grid-template-columns:1fr auto;gap:2px 12px;padding:12px 14px;border-top:1px solid var(--line);cursor:pointer}
+.tx:first-child{border-top:0}
+.tx .cat{font-weight:600;min-width:0;overflow-wrap:anywhere}
+.tx .note{grid-column:1;font-size:.84rem;color:var(--muted);min-width:0;overflow-wrap:anywhere}
+.tx .val{font-weight:700;grid-row:1;grid-column:2}
+.tx .val.in{color:var(--accent)}
+.tx-actions{grid-column:1/-1;display:flex;gap:8px;margin-top:8px}
+.tx-actions button{flex:1;padding:9px;border-radius:10px;border:1px solid var(--line);background:var(--bg);font-weight:600}
+.tx-actions .del{color:var(--bad);border-color:var(--bad);background:transparent}
+
+.empty{background:var(--surface);border:1px dashed var(--line);border-radius:16px;padding:22px 16px;text-align:center;color:var(--muted)}
+.empty strong{display:block;color:var(--ink);margin-bottom:4px}
+
+.fab{position:fixed;right:max(18px, calc(env(safe-area-inset-right,0px) + 12px));bottom:calc(20px + env(safe-area-inset-bottom,0px));
+  height:56px;padding:0 22px;border-radius:18px;border:0;background:var(--accent);color:var(--accent-ink);font-weight:700;font-size:1rem;
+  box-shadow:0 8px 24px rgba(14,122,92,.35);display:flex;align-items:center;gap:8px}
+.fab span{font-size:1.5rem;line-height:0;margin-top:-2px}
+
+.scrim{position:fixed;inset:0;background:rgba(10,20,16,.45);z-index:10}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:11;background:var(--surface);border-radius:22px 22px 0 0;
+  max-height:92%;overflow-y:auto;padding-top:10px;padding-bottom:calc(18px + env(safe-area-inset-bottom,0px));
+  padding-left:max(16px, env(safe-area-inset-left,0px));padding-right:max(16px, env(safe-area-inset-right,0px))}
+.sheet-in{max-width:520px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+.grab{width:40px;height:4px;border-radius:9px;background:var(--line);margin:0 auto 4px}
+.sheet h2{font-family:var(--display);font-weight:600;font-size:1.25rem;margin:0}
+.sheet p{margin:0}
+.muted{color:var(--muted);font-size:.88rem}
+.seg{display:grid;grid-template-columns:1fr 1fr;background:var(--bg);border-radius:12px;padding:4px;gap:4px}
+.seg button{border:0;background:none;padding:10px;border-radius:9px;font-weight:600;color:var(--muted)}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.amount{display:flex;align-items:center;gap:6px;border-bottom:2px solid var(--accent);padding-bottom:4px}
+.amount span{font-family:var(--display);font-size:2rem;font-weight:600;color:var(--muted)}
+.amount input{flex:1;min-width:0;border:0;background:transparent;font-family:var(--display);font-weight:800;font-size:2.4rem;color:var(--ink);padding:0;outline:none}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chips button{border:1px solid var(--line);background:var(--bg);border-radius:99px;padding:8px 14px;font-weight:500}
+.chips button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.field{display:flex;flex-direction:column;gap:6px;min-width:0}
+.field input{border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:12px;padding:12px;font:inherit;font-size:16px;width:100%;min-width:0}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.primary,.secondary{border:0;background:var(--accent);color:var(--accent-ink);font-weight:700;border-radius:14px;padding:15px;font-size:1rem;width:100%}
+.secondary{background:var(--bg);color:var(--ink);border:1px solid var(--line)}
+.danger{background:var(--bad);color:#fff}
+.primary:disabled{opacity:.45}
+.err{color:var(--bad);font-size:.85rem}
+.bset{display:grid;grid-template-columns:1fr 130px;gap:8px 10px;align-items:center}
+.bset label{font-weight:600}
+.bset input{border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:10px;padding:10px;font:inherit;font-size:16px;text-align:right;width:100%}
+.stack{display:flex;flex-direction:column;gap:10px}
+.confirm{background:var(--soft);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:10px}
+.status{display:flex;align-items:center;gap:8px;font-size:.8rem;color:var(--muted);margin-top:-12px;background:none;border:0;padding:0;text-align:left}
+.status i{width:8px;height:8px;border-radius:50%;background:var(--muted);flex:none}
+.status.ok i{background:var(--accent)} .status.wait i{background:var(--warn)} .status.bad i{background:var(--bad)} .status.bad{color:var(--bad)}
+.tx .by{color:var(--muted);font-size:.78rem}
+.invite{display:flex;flex-direction:column;gap:8px;background:var(--bg);border:1px solid var(--line);border-radius:14px;padding:12px}
+.invite code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.82rem;overflow-wrap:anywhere;user-select:all;color:var(--ink)}
+.sep{border:0;border-top:1px solid var(--line);margin:4px 0}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(90px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:12px;font-weight:600;z-index:20;font-size:.9rem;max-width:calc(100% - 32px);text-align:center}
+@media (prefers-reduced-motion:no-preference){.sheet{animation:up .22s ease-out}@keyframes up{from{transform:translateY(30px);opacity:.6}}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="month">
+    <button class="iconbtn" id="prev" aria-label="Previous month">‹</button>
+    <h1 id="monthLabel">This month</h1>
+    <div class="right">
+      <button class="iconbtn" id="next" aria-label="Next month">›</button>
+      <button class="iconbtn" id="menuBtn" aria-label="Sync and settings">⋯</button>
+    </div>
+  </header>
+  <button class="status" id="status" type="button"><i></i><span id="statusText">Not connected</span></button>
+
+  <section class="balance">
+    <span class="label">Left this month</span>
+    <p class="big" id="left">₱0</p>
+    <div class="split">
+      <div class="in"><span class="label">Income</span><strong id="inc">₱0</strong></div>
+      <div><span class="label">Spent</span><strong id="exp">₱0</strong></div>
+    </div>
+  </section>
+
+
+  <section>
+    <div class="sec-h"><h2>Budgets</h2><button class="link" id="editBudgets">Edit budgets</button></div>
+    <div class="budgets" id="budgets"></div>
+  </section>
+
+  <section>
+    <div class="sec-h"><h2>Transactions</h2><span class="label" id="count"></span></div>
+    <div id="ledger"></div>
+  </section>
+</div>
+
+<button class="fab" id="addBtn"><span>+</span> Add</button>
+
+<div class="scrim" id="scrim" hidden></div>
+
+<div class="sheet" id="addSheet" hidden role="dialog" aria-modal="true" aria-labelledby="addTitle">
+  <form class="sheet-in" id="addForm" novalidate>
+    <div class="grab"></div>
+    <h2 id="addTitle">New entry</h2>
+    <div class="seg" role="group" aria-label="Type">
+      <button type="button" id="tExp" aria-pressed="true">Expense</button>
+      <button type="button" id="tInc" aria-pressed="false">Income</button>
+    </div>
+    <label class="amount" for="amt"><span>₱</span><input id="amt" inputmode="decimal" autocomplete="off" placeholder="0"></label>
+    <div class="field"><span class="label">Category</span><div class="chips" id="chips"></div></div>
+    <div class="row2">
+      <div class="field"><label class="label" for="note">Note</label><input id="note" placeholder="e.g. Jollibee lunch" maxlength="80"></div>
+      <div class="field"><label class="label" for="date">Date</label><input id="date" type="date"></div>
+    </div>
+    <p class="err" id="addErr" hidden></p>
+    <button class="primary" id="saveBtn" type="submit">Save</button>
+  </form>
+</div>
+
+<div class="sheet" id="budgetSheet" hidden role="dialog" aria-modal="true" aria-labelledby="bTitle">
+  <form class="sheet-in" id="budgetForm" novalidate>
+    <div class="grab"></div>
+    <h2 id="bTitle">Monthly budgets</h2>
+    <p class="muted">Leave a category blank if you only want to track it. These amounts apply to every month.</p>
+    <div class="bset" id="bset"></div>
+    <button class="primary" type="submit">Save budgets</button>
+  </form>
+</div>
+
+<div class="sheet" id="setupSheet" hidden role="dialog" aria-modal="true" aria-labelledby="sTitle">
+  <form class="sheet-in" id="setupForm" novalidate>
+    <div class="grab"></div>
+    <h2 id="sTitle">Join your household</h2>
+    <p class="muted">Entries you and your partner add will show up on both phones.</p>
+    <div class="field"><label class="label" for="meName">Your name</label><input id="meName" maxlength="40" autocomplete="given-name" placeholder="e.g. Medel"></div>
+    <div class="field"><label class="label" for="hhKey">Household key</label><input id="hhKey" maxlength="60" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="XXXX-XXXX-XXXX-XXXX"></div>
+    <p class="err" id="setupErr" hidden></p>
+    <button class="primary" id="setupBtn" type="submit">Connect</button>
+    <button class="secondary" id="setupLater" type="button">Use offline for now</button>
+  </form>
+</div>
+
+<div class="sheet" id="menuSheet" hidden role="dialog" aria-modal="true" aria-labelledby="mTitle">
+  <div class="sheet-in">
+    <div class="grab"></div>
+    <h2 id="mTitle">Sync</h2>
+    <p class="muted" id="syncInfo"></p>
+    <div class="stack">
+      <button class="primary" id="syncNow">Sync now</button>
+    </div>
+    <div class="invite" id="inviteBox" hidden>
+      <span class="label">Invite your partner</span>
+      <p class="muted">Send this link. Opening it on their phone connects them to the same records.</p>
+      <code id="inviteLink"></code>
+      <div class="row2">
+        <button class="secondary" id="copyInvite">Copy link</button>
+        <button class="secondary" id="shareInvite">Share</button>
+      </div>
+    </div>
+    <button class="secondary" id="changeSetup">Change name or household key</button>
+
+    <hr class="sep">
+    <h2>Backup</h2>
+    <p class="muted">Your records are kept on the server and on each phone. A backup file is extra insurance.</p>
+    <p class="muted" id="lastBackup"></p>
+    <div class="stack">
+      <button class="secondary" id="exportBtn">Save backup file</button>
+      <button class="secondary" id="importBtn">Restore from backup</button>
+      <input type="file" id="importFile" accept=".json,application/json" hidden>
+    </div>
+    <div class="confirm" id="importConfirm" hidden>
+      <p id="importText"></p>
+      <div class="row2">
+        <button class="secondary" id="importCancel">Cancel</button>
+        <button class="primary" id="importYes">Add them</button>
+      </div>
+    </div>
+    <button class="secondary" id="menuClose" type="button">Done</button>
+  </div>
+</div>
+
+<div class="toast" id="toast" hidden></div>
+
+<script>
+(() => {
+  const EXP_CATS = ["Food","Groceries","Transport","Bills","Load & Internet","Health","Family","Shopping","Others"];
+  const INC_CATS = ["Salary","Client payment","Side income","Others"];
+  const KEY = "pitaka-v2", SETUP_KEY = "pitaka-setup", OLD_KEY = "pitaka-v1";
+  const CFG = window.PITAKA_CONFIG || {};
+  const CFG_OK = /^https:\/\/.+/.test(CFG.supabaseUrl || "") && (CFG.supabaseKey || "").length > 20 && !/YOUR/.test(CFG.supabaseUrl + CFG.supabaseKey);
+  const peso = n => (n < 0 ? "−₱" : "₱") + Math.abs(n).toLocaleString("en-PH", {minimumFractionDigits: Math.abs(n) % 1 ? 2 : 0, maximumFractionDigits: 2});
+  const $ = id => document.getElementById(id);
+  const pad = n => String(n).padStart(2, "0");
+  const ymd = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+  const today = () => ymd(new Date());
+  const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+
+  // data.tx is a map of id -> entry. Deleted entries stay as tombstones so the delete syncs.
+  let data = { tx: {}, budgets: {}, budgetsMtime: 0, budgetsDirty: false, pending: [], lastNow: 0, lastSyncAt: 0, lastBackup: null };
+  let setup = { name: "", key: "", skipped: false };
+  let view = { month: today().slice(0,7), openTx: null };
+  let sync$ = { busy: false, again: false, state: "off", keyBad: false };
+
+  /* ---------- Local storage ---------- */
+  function load(){
+    try { const s = JSON.parse(localStorage.getItem(SETUP_KEY) || "null"); if (s) setup = Object.assign(setup, s); } catch(e){}
+    try {
+      const v = JSON.parse(localStorage.getItem(KEY) || "null");
+      if (v && v.tx) { data = Object.assign(data, v); return; }
+      // Carry over entries from the phone-only version
+      const old = JSON.parse(localStorage.getItem(OLD_KEY) || "null");
+      if (old && Array.isArray(old.tx)) {
+        const now = Date.now();
+        old.tx.forEach(t => { const id = /^[a-z0-9]{6,40}$/.test(t.id || "") ? t.id : newId();
+          data.tx[id] = { id, type: t.type, amount: t.amount, cat: t.cat, note: t.note || "", date: t.date, ts: t.ts || now, by: "", mtime: now, deleted: 0 };
+          data.pending.push(id); });
+        if (old.budgets && Object.keys(old.budgets).length) { data.budgets = old.budgets; data.budgetsMtime = now; data.budgetsDirty = true; }
+        data.lastBackup = old.lastBackup || null;
+        save();
+      }
+    } catch(e){}
+  }
+  function save(){
+    try { localStorage.setItem(KEY, JSON.stringify(data)); return true; }
+    catch(e){ toast("Couldn't save. Your phone storage may be full."); return false; }
+  }
+  function saveSetup(){ try { localStorage.setItem(SETUP_KEY, JSON.stringify(setup)); } catch(e){} }
+  if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+
+  const live = () => Object.values(data.tx).filter(t => !t.deleted);
+  function markPending(id){ if (!data.pending.includes(id)) data.pending.push(id); }
+
+  /* ---------- Sync ---------- */
+  function ago(ms){
+    const m = Math.round((Date.now() - ms) / 60000);
+    if (m < 1) return "just now"; if (m < 60) return `${m} min ago`;
+    const h = Math.round(m / 60); if (h < 24) return `${h} hr ago`;
+    return new Date(ms).toLocaleDateString("en-PH", {month:"short", day:"numeric"});
+  }
+  function drawStatus(){
+    const s = $("status"), n = data.pending.length + (data.budgetsDirty ? 1 : 0);
+    let cls = "", text;
+    if (!CFG_OK) { cls = "bad"; text = "Sync server not set up yet (edit config.js)"; }
+    else if (!setup.key) { text = "Offline only · tap to sync with your partner"; }
+    else if (sync$.setupMissing) { cls = "bad"; text = "Database not set up · run supabase-setup.sql in Supabase"; }
+    else if (sync$.apiKeyBad) { cls = "bad"; text = "Supabase key not accepted · check config.js"; }
+    else if (sync$.keyBad) { cls = "bad"; text = "Household key not accepted · tap to fix"; }
+    else if (sync$.state === "error") { cls = "wait"; text = n ? `Offline · ${n} ${n === 1 ? "change" : "changes"} waiting to sync` : (data.lastSyncAt ? `Offline · last synced ${ago(data.lastSyncAt)}` : "Can't reach the server"); }
+    else if (sync$.busy && !data.lastSyncAt) { cls = "wait"; text = "Syncing…"; }
+    else if (data.lastSyncAt) { cls = n ? "wait" : "ok"; text = n ? "Syncing…" : `Synced ${ago(data.lastSyncAt)}`; }
+    else { cls = "wait"; text = "Connecting…"; }
+    s.className = "status " + cls;
+    $("statusText").textContent = text;
+  }
+
+  async function sync(){
+    if (!setup.key || !navigator.onLine && sync$.state === "error") { drawStatus(); return sync$.state; }
+    if (sync$.busy) { sync$.again = true; return "busy"; }
+    sync$.busy = true; drawStatus();
+    const sentIds = [...data.pending];
+    const sentM = {}; sentIds.forEach(id => { if (data.tx[id]) sentM[id] = data.tx[id].mtime; });
+    const sentBM = data.budgetsMtime, sentBDirty = data.budgetsDirty;
+    const body = {
+      since: Math.max(0, data.lastNow - 5000),
+      changes: sentIds.map(id => data.tx[id]).filter(Boolean),
+      budgets: sentBDirty ? { v: data.budgets, mtime: data.budgetsMtime } : null
+    };
+    try {
+      if (!CFG_OK) throw new Error("not_configured");
+      const r = await fetch(CFG.supabaseUrl.replace(/\/+$/, "") + "/rest/v1/rpc/pitaka_sync", { method: "POST", cache: "no-store",
+        headers: { "Content-Type": "application/json", "apikey": CFG.supabaseKey },
+        body: JSON.stringify({ p_key: setup.key, p_since: body.since, p_changes: body.changes, p_budgets: body.budgets }) });
+      if (!r.ok) {
+        let msg = ""; try { msg = (await r.json()).message || ""; } catch(_){}
+        if (msg === "bad_key") { sync$.keyBad = true; sync$.state = "error"; return "bad_key"; }
+        if (r.status === 404 || /pitaka_sync|schema cache/i.test(msg)) { sync$.setupMissing = true; sync$.state = "error"; return "setup_missing"; }
+        if (r.status === 401 || /api key/i.test(msg)) { sync$.apiKeyBad = true; sync$.state = "error"; return "api_key_bad"; }
+        throw new Error("HTTP " + r.status);
+      }
+      const res = await r.json();
+      sync$.keyBad = false; sync$.setupMissing = false; sync$.apiKeyBad = false;
+      data.pending = data.pending.filter(id => !(id in sentM) || !data.tx[id] || data.tx[id].mtime !== sentM[id]);
+      if (sentBDirty && data.budgetsMtime === sentBM) data.budgetsDirty = false;
+      (res.tx || []).forEach(t => {
+        const cur = data.tx[t.id];
+        if (!cur || (!data.pending.includes(t.id) && t.mtime >= cur.mtime)) data.tx[t.id] = t;
+      });
+      if (res.budgets && !data.budgetsDirty && res.budgets.mtime >= data.budgetsMtime) {
+        data.budgets = Array.isArray(res.budgets.v) ? {} : (res.budgets.v || {});
+        data.budgetsMtime = res.budgets.mtime;
+      }
+      data.lastNow = res.now; data.lastSyncAt = Date.now(); sync$.state = "ok";
+      save(); render();
+      return "ok";
+    } catch(e) {
+      sync$.state = "error"; return "error";
+    } finally {
+      sync$.busy = false; drawStatus();
+      if (sync$.again) { sync$.again = false; setTimeout(sync, 300); }
+    }
+  }
+  let syncTimer; function scheduleSync(){ clearTimeout(syncTimer); syncTimer = setTimeout(sync, 700); }
+  setInterval(() => { if (document.visibilityState === "visible") sync(); else drawStatus(); }, 20000);
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") sync(); });
+  window.addEventListener("online", () => sync());
+  window.addEventListener("offline", () => { sync$.state = "error"; drawStatus(); });
+
+  /* ---------- Render ---------- */
+  function monthName(ym){ const [y,m] = ym.split("-").map(Number); return new Date(y, m-1, 1).toLocaleDateString("en-PH", {month:"long", year:"numeric"}); }
+  function dayName(d){
+    if (d === today()) return "Today";
+    const y = new Date(); y.setDate(y.getDate()-1);
+    if (d === ymd(y)) return "Yesterday";
+    const [a,b,c] = d.split("-").map(Number);
+    return new Date(a,b-1,c).toLocaleDateString("en-PH",{weekday:"short", month:"short", day:"numeric"});
+  }
+
+  function render(){
+    const list = live().filter(t => (t.date||"").startsWith(view.month));
+    const inc = list.filter(t => t.type === "income").reduce((s,t) => s + t.amount, 0);
+    const exp = list.filter(t => t.type === "expense").reduce((s,t) => s + t.amount, 0);
+    $("monthLabel").textContent = monthName(view.month);
+    $("inc").textContent = peso(inc);
+    $("exp").textContent = peso(exp);
+    const left = Math.round((inc - exp) * 100) / 100;
+    $("left").textContent = peso(left);
+    $("left").classList.toggle("neg", left < 0);
+
+    // Budgets
+    const spentBy = {};
+    list.filter(t => t.type === "expense").forEach(t => spentBy[t.cat] = (spentBy[t.cat]||0) + t.amount);
+    const allCats = [...EXP_CATS, ...Object.keys(spentBy).filter(c => !EXP_CATS.includes(c))];
+    const cats = allCats.filter(c => data.budgets[c] > 0 || spentBy[c] > 0);
+    const bx = $("budgets"); bx.textContent = "";
+    if (!cats.length){
+      const e = el("div", "empty"); e.style.border = "0"; e.style.padding = "8px";
+      e.append(el("strong", null, "No budgets yet"), "Set a monthly limit per category, like ₱8,000 for food, then track how much is left.");
+      bx.append(e);
+    }
+    cats.forEach(c => {
+      const b = data.budgets[c] || 0, s = spentBy[c] || 0;
+      const row = el("div", "brow");
+      const amt = el("span", "amt"); amt.append(el("b", null, peso(s)), b ? " / " + peso(b) : " spent");
+      row.append(el("span", "name", c), amt);
+      if (b){
+        const pct = s / b, bar = el("div", "bar"), fill = el("i");
+        fill.style.width = Math.min(100, pct*100) + "%";
+        if (pct >= 1) fill.className = "bad"; else if (pct >= .8) fill.className = "warn";
+        bar.append(fill);
+        row.append(bar, el("span", "hint" + (pct >= 1 ? " bad" : ""), pct >= 1 ? `Over by ${peso(s-b)}` : `${peso(b-s)} left`));
+      }
+      bx.append(row);
+    });
+
+    // Ledger
+    const lg = $("ledger"); lg.textContent = "";
+    $("count").textContent = list.length ? `${list.length} ${list.length === 1 ? "entry" : "entries"}` : "";
+    if (!list.length){
+      const e = el("div", "empty"); e.append(el("strong", null, "Nothing logged for this month"), "Tap Add to record an expense or income.");
+      lg.append(e);
+    } else {
+      const sorted = [...list].sort((a,b) => b.date.localeCompare(a.date) || (b.ts||0) - (a.ts||0));
+      const groups = {};
+      sorted.forEach(t => (groups[t.date] = groups[t.date] || []).push(t));
+      Object.keys(groups).forEach(d => {
+        const wrap = el("div", "day"), box = el("div", "list");
+        groups[d].forEach(t => {
+          const row = el("div", "tx"); row.tabIndex = 0; row.setAttribute("role","button");
+          row.append(el("span", "cat", t.cat), el("span", "val" + (t.type === "income" ? " in" : ""), (t.type === "income" ? "+" : "−") + peso(t.amount)));
+          if (t.note || t.by){
+            const n = el("span", "note", t.note || "");
+            if (t.by) n.append(el("span", "by", (t.note ? " · " : "") + t.by));
+            row.append(n);
+          }
+          if (view.openTx === t.id){
+            const act = el("div", "tx-actions");
+            const cancel = el("button", null, "Cancel"), del = el("button", "del", "Delete");
+            cancel.onclick = e => { e.stopPropagation(); view.openTx = null; render(); };
+            del.onclick = e => { e.stopPropagation(); view.openTx = null;
+              t.deleted = 1; t.mtime = Date.now(); markPending(t.id); save(); render(); scheduleSync(); toast("Deleted"); };
+            act.append(cancel, del); row.append(act);
+          }
+          const toggle = () => { view.openTx = view.openTx === t.id ? null : t.id; render(); };
+          row.onclick = toggle;
+          row.onkeydown = e => { if (e.key === "Enter" || e.key === " "){ e.preventDefault(); toggle(); } };
+          box.append(row);
+        });
+        wrap.append(el("h3", null, dayName(d)), box); lg.append(wrap);
+      });
+    }
+    drawStatus();
+  }
+
+  /* ---------- Month nav ---------- */
+  function shift(n){ const [y,m] = view.month.split("-").map(Number); const d = new Date(y, m-1+n, 1); view.month = `${d.getFullYear()}-${pad(d.getMonth()+1)}`; view.openTx = null; render(); }
+  $("prev").onclick = () => shift(-1);
+  $("next").onclick = () => shift(1);
+
+  /* ---------- Sheets ---------- */
+  let openSheet = null;
+  function show(id){ hide(); openSheet = $(id); $("scrim").hidden = false; openSheet.hidden = false; }
+  function hide(){ if (openSheet) openSheet.hidden = true; $("scrim").hidden = true; openSheet = null; }
+  $("scrim").onclick = hide;
+  document.addEventListener("keydown", e => { if (e.key === "Escape") hide(); });
+
+  /* ---------- Add entry ---------- */
+  let type = "expense", cat = "Food";
+  function drawChips(){
+    const c = $("chips"); c.textContent = "";
+    const cats = type === "expense" ? EXP_CATS : INC_CATS;
+    if (!cats.includes(cat)) cat = cats[0];
+    cats.forEach(name => {
+      const b = el("button", null, name); b.type = "button";
+      b.setAttribute("aria-pressed", String(name === cat));
+      b.onclick = () => { cat = name; drawChips(); };
+      c.append(b);
+    });
+    $("tExp").setAttribute("aria-pressed", String(type === "expense"));
+    $("tInc").setAttribute("aria-pressed", String(type === "income"));
+  }
+  $("tExp").onclick = () => { type = "expense"; drawChips(); };
+  $("tInc").onclick = () => { type = "income"; drawChips(); };
+
+  $("addBtn").onclick = () => {
+    type = "expense";
+    $("amt").value = ""; $("note").value = "";
+    $("date").value = view.month === today().slice(0,7) ? today() : view.month + "-01";
+    $("addErr").hidden = true; drawChips(); show("addSheet");
+    setTimeout(() => $("amt").focus(), 60);
+  };
+
+  $("addForm").addEventListener("submit", e => {
+    e.preventDefault();
+    const amount = Math.round(parseFloat(($("amt").value || "").replace(/[,₱\s]/g,"")) * 100) / 100;
+    const date = $("date").value, err = $("addErr");
+    if (!(amount > 0)){ err.textContent = "Enter an amount greater than zero."; err.hidden = false; return; }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)){ err.textContent = "Pick a date."; err.hidden = false; return; }
+    const now = Date.now();
+    const t = { id: newId(), type, amount, cat, note: $("note").value.trim(), date, ts: now, by: setup.name || "", mtime: now, deleted: 0 };
+    data.tx[t.id] = t; markPending(t.id);
+    if (!save()){ delete data.tx[t.id]; data.pending = data.pending.filter(x => x !== t.id); return; }
+    hide(); view.month = date.slice(0,7); render(); scheduleSync();
+    toast(type === "expense" ? `Logged ${peso(amount)} for ${cat}` : `Added ${peso(amount)} income`);
+  });
+
+  /* ---------- Budgets ---------- */
+  $("editBudgets").onclick = () => {
+    const box = $("bset"); box.textContent = "";
+    EXP_CATS.forEach((c,i) => {
+      const l = el("label", null, c); l.htmlFor = "b" + i;
+      const inp = document.createElement("input"); inp.id = "b" + i; inp.inputMode = "numeric"; inp.placeholder = "No limit";
+      inp.dataset.cat = c; inp.value = data.budgets[c] ? data.budgets[c] : "";
+      box.append(l, inp);
+    });
+    show("budgetSheet");
+  };
+  $("budgetForm").addEventListener("submit", e => {
+    e.preventDefault();
+    const b = {};
+    $("bset").querySelectorAll("input").forEach(i => { const v = parseFloat(i.value.replace(/[,₱\s]/g,"")); if (v > 0) b[i.dataset.cat] = Math.round(v); });
+    data.budgets = b; data.budgetsMtime = Date.now(); data.budgetsDirty = true;
+    save(); hide(); render(); scheduleSync(); toast("Budgets saved");
+  });
+
+  /* ---------- Household setup ---------- */
+  function openSetup(prefillKey){
+    $("meName").value = setup.name || "";
+    $("hhKey").value = prefillKey || setup.key || "";
+    $("setupErr").hidden = true;
+    show("setupSheet");
+    setTimeout(() => (setup.name ? $("hhKey") : $("meName")).focus(), 60);
+  }
+  $("setupForm").addEventListener("submit", async e => {
+    e.preventDefault();
+    const name = $("meName").value.trim(), key = $("hhKey").value.trim().toUpperCase(), err = $("setupErr");
+    if (!name){ err.textContent = "Enter your name so your partner knows who added each entry."; err.hidden = false; return; }
+    if (!key){ err.textContent = "Enter the household key."; err.hidden = false; return; }
+    const prevName = setup.name;
+    setup = { name, key, skipped: false }; saveSetup();
+    // Tag this phone's earlier entries that have no name yet
+    if (!prevName) Object.values(data.tx).forEach(t => { if (!t.by) { t.by = name; t.mtime = Date.now(); markPending(t.id); } });
+    save();
+    $("setupBtn").disabled = true; $("setupBtn").textContent = "Connecting…";
+    sync$.keyBad = false; data.lastNow = 0;
+    const res = await sync();
+    $("setupBtn").disabled = false; $("setupBtn").textContent = "Connect";
+    if (res === "bad_key"){ err.textContent = "That household key doesn't match. Check it with your partner and try again."; err.hidden = false; return; }
+    if (res === "setup_missing"){ err.textContent = "The database isn't set up yet. Run supabase-setup.sql in the Supabase SQL Editor, then tap Connect again."; err.hidden = false; return; }
+    if (res === "api_key_bad"){ err.textContent = "Supabase rejected the publishable key in config.js. Copy it again from Project Settings > API Keys."; err.hidden = false; return; }
+    hide(); render();
+    toast(res === "ok" ? "Connected. Entries now sync." : "Saved. It will sync once you're online.");
+  });
+  $("setupLater").onclick = () => { setup.skipped = true; saveSetup(); hide(); };
+
+  $("status").onclick = () => { if (!setup.key || sync$.keyBad) openSetup(); else openMenu(); };
+
+  /* ---------- Menu: sync, invite, backup ---------- */
+  function inviteUrl(){ return location.origin + location.pathname + "#join=" + encodeURIComponent(setup.key); }
+  function openMenu(){
+    $("importConfirm").hidden = true;
+    const total = live().length;
+    $("syncInfo").textContent = setup.key
+      ? `Signed in as ${setup.name}. ${total} ${total === 1 ? "entry" : "entries"} on this phone. ` + (data.lastSyncAt ? `Last synced ${ago(data.lastSyncAt)}.` : "Not synced yet.")
+      : "This phone isn't connected to a household yet, so entries stay on this phone only.";
+    $("syncNow").textContent = setup.key ? "Sync now" : "Connect to household";
+    $("inviteBox").hidden = !setup.key;
+    if (setup.key) $("inviteLink").textContent = inviteUrl();
+    $("changeSetup").hidden = !setup.key;
+    $("lastBackup").textContent = data.lastBackup ? "Last backup: " + new Date(data.lastBackup).toLocaleDateString("en-PH", {month:"long", day:"numeric", year:"numeric"}) : "No backup file saved yet.";
+    show("menuSheet");
+  }
+  $("menuBtn").onclick = openMenu;
+  $("menuClose").onclick = hide;
+  $("syncNow").onclick = async () => {
+    if (!setup.key) return openSetup();
+    $("syncNow").disabled = true;
+    const r = await sync();
+    $("syncNow").disabled = false;
+    if (r === "bad_key") openSetup(); else { openMenu(); toast(r === "ok" ? "Up to date" : "Can't reach the server. Will retry."); }
+  };
+  $("changeSetup").onclick = () => openSetup();
+  $("copyInvite").onclick = async () => {
+    try { await navigator.clipboard.writeText(inviteUrl()); toast("Link copied"); }
+    catch(e){ const r = document.createRange(); r.selectNodeContents($("inviteLink")); const s = getSelection(); s.removeAllRanges(); s.addRange(r); toast("Select and copy the link"); }
+  };
+  $("shareInvite").onclick = async () => {
+    const text = `Join our Pitaka budget so we see the same records.\n\n1. Open this link: ${inviteUrl()}\n2. Install it (Add to Home Screen)\n3. If it asks, the household key is ${setup.key}`;
+    try { if (navigator.share) { await navigator.share({ title: "Pitaka Budget", text }); return; } } catch(e){ if (e && e.name === "AbortError") return; }
+    try { await navigator.clipboard.writeText(text); toast("Invite copied. Paste it in Messenger."); } catch(e){ toast("Copy the link above and send it"); }
+  };
+
+  $("exportBtn").onclick = async () => {
+    const json = JSON.stringify({ app: "pitaka", version: 2, exported: new Date().toISOString(), tx: live(), budgets: data.budgets }, null, 1);
+    const name = `pitaka-backup-${today()}.json`;
+    const file = new File([json], name, { type: "application/json" });
+    let ok = false;
+    try { if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: name }); ok = true; } }
+    catch(e){ if (e && e.name === "AbortError") return; }
+    if (!ok){
+      const url = URL.createObjectURL(file);
+      const a = document.createElement("a"); a.href = url; a.download = name; document.body.append(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 4000);
+    }
+    data.lastBackup = Date.now(); save(); openMenu(); toast("Backup file saved");
+  };
+
+  let pendingImport = null;
+  $("importBtn").onclick = () => { $("importFile").value = ""; $("importFile").click(); };
+  $("importFile").onchange = async () => {
+    const f = $("importFile").files[0]; if (!f) return;
+    try {
+      const v = JSON.parse(await f.text());
+      if (v.app !== "pitaka" || !Array.isArray(v.tx)) throw new Error("bad");
+      const ok = v.tx.filter(t => t && typeof t.amount === "number" && t.amount > 0 && /^\d{4}-\d{2}-\d{2}$/.test(t.date) && (t.type === "expense" || t.type === "income"));
+      const fresh = ok.filter(t => !(t.id && data.tx[t.id]));
+      pendingImport = { tx: fresh, budgets: v.budgets && typeof v.budgets === "object" && !Array.isArray(v.budgets) ? v.budgets : null };
+      $("importText").textContent = fresh.length
+        ? `This backup has ${ok.length} entries. ${fresh.length} of them aren't here yet and will be added.`
+        : `All ${ok.length} entries in this backup are already here.`;
+      $("importYes").hidden = !fresh.length;
+      $("importConfirm").hidden = false;
+    } catch(e){ toast("That file isn't a Pitaka backup."); }
+  };
+  $("importCancel").onclick = () => { pendingImport = null; $("importConfirm").hidden = true; };
+  $("importYes").onclick = () => {
+    if (!pendingImport) return;
+    const now = Date.now();
+    pendingImport.tx.forEach(t => {
+      const id = /^[a-z0-9]{6,40}$/.test(t.id || "") ? t.id : newId();
+      data.tx[id] = { id, type: t.type, amount: t.amount, cat: String(t.cat || "Others"), note: String(t.note || ""), date: t.date, ts: t.ts || now, by: t.by || setup.name || "", mtime: now, deleted: 0 };
+      markPending(id);
+    });
+    if (pendingImport.budgets && !Object.keys(data.budgets).length) { data.budgets = pendingImport.budgets; data.budgetsMtime = now; data.budgetsDirty = true; }
+    pendingImport = null;
+    save(); hide(); render(); scheduleSync(); toast("Backup entries added");
+  };
+
+  let tt; function toast(msg){ const t = $("toast"); t.textContent = msg; t.hidden = false; clearTimeout(tt); tt = setTimeout(() => t.hidden = true, 2400); }
+
+  /* ---------- Boot ---------- */
+  load(); render();
+  const m = location.hash.match(/^#join=([^&]+)/);
+  if (m) {
+    const k = decodeURIComponent(m[1]);
+    history.replaceState(null, "", location.pathname + location.search);
+    if (k !== setup.key) openSetup(k);
+  } else if (!setup.key && !setup.skipped) {
+    openSetup();
+  }
+  sync();
+  if ("serviceWorker" in navigator && location.protocol !== "file:") {
+    window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+  }
+})();
+</script>
+</body>
+</html>
