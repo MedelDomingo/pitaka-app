@@ -143,7 +143,19 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
 .citem .what{font-weight:600;min-width:0;overflow-wrap:anywhere}
 .citem .meta{grid-column:1;font-size:.8rem;color:var(--muted);min-width:0;overflow-wrap:anywhere}
 .citem .amt{grid-row:1;grid-column:2;font-weight:700}
-.citems .none{padding:12px 14px;color:var(--muted);font-size:.88rem}
+.citems .none,.bitems .none{padding:12px 14px;color:var(--muted);font-size:.88rem}
+.brow.tap{cursor:pointer;border-radius:10px;margin:-6px;padding:6px}
+.brow.tap:focus-visible{outline:2px solid var(--accent);outline-offset:0}
+.brow .chev{display:inline-block;margin-left:6px;color:var(--muted);font-size:.8rem;transition:transform .15s}
+.brow.open .chev{transform:rotate(90deg)}
+.bitems{grid-column:1/-1;margin-top:6px;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--bg)}
+.bitems .citem{background:transparent}
+.cbreak{padding:4px 14px 10px;display:flex;flex-direction:column;gap:6px;border-top:1px solid var(--line);padding-top:10px}
+.cbreak .lbl{font-size:.72rem;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);font-weight:600}
+.crow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 12px;align-items:baseline}
+.crow .cn{font-weight:600;min-width:0;overflow-wrap:anywhere}
+.crow .cv{font-weight:700}
+.crow .bar{height:5px}
 .payhint{font-size:.82rem;color:var(--muted);margin:0}
 .cardset{display:flex;flex-direction:column;gap:12px}
 .cardedit{display:grid;grid-template-columns:minmax(0,1fr) 40px;gap:8px;padding:12px;border:1px solid var(--line);border-radius:14px;background:var(--bg)}
@@ -326,6 +338,14 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
   const cardsList = () => Array.isArray(data.budgets.__cards) ? data.budgets.__cards.filter(c => c && typeof c.id === "string" && typeof c.name === "string") : [];
   const cardById = id => cardsList().find(c => c.id === id);
   const isCardPay = t => t.type === "expense" && t.pay && t.pay !== "cash";
+  const payName = t => isCardPay(t) ? (cardById(t.pay) || { name: "Removed card" }).name : "Cash";
+  const newestFirst = (a, b) => b.date.localeCompare(a.date) || (b.ts||0) - (a.ts||0);
+  function itemRow(t, title, metaParts){
+    const r = el("div", "citem");
+    r.append(el("span", "what", title), el("span", "amt", peso(t.amount)),
+             el("span", "meta", metaParts.filter(Boolean).join(" · ")));
+    return r;
+  }
   function cleanCat(raw, list){
     const name = String(raw || "").trim().replace(/\s+/g, " ");
     if (!name) return [null, "Type a category name."];
@@ -491,15 +511,27 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
     }
     cats.forEach(c => {
       const b = data.budgets[c] || 0, s = spentBy[c] || 0;
-      const row = el("div", "brow");
+      const open = view.openBudget === c;
+      const row = el("div", "brow tap" + (open ? " open" : "")); row.tabIndex = 0; row.setAttribute("role", "button"); row.setAttribute("aria-expanded", String(open));
       const amt = el("span", "amt"); amt.append(el("b", null, peso(s)), b ? " / " + peso(b) : " spent");
-      row.append(el("span", "name", c), amt);
+      const nm = el("span", "name", c); nm.append(el("span", "chev", "›"));
+      row.append(nm, amt);
+      const toggle = () => { view.openBudget = open ? null : c; render(); };
+      row.onclick = e => { if (!e.target.closest(".bitems")) toggle(); };
+      row.onkeydown = e => { if (e.target === row && (e.key === "Enter" || e.key === " ")){ e.preventDefault(); toggle(); } };
       if (b){
         const pct = s / b, bar = el("div", "bar"), fill = el("i");
         fill.style.width = Math.min(100, pct*100) + "%";
         if (pct >= 1) fill.className = "bad"; else if (pct >= .8) fill.className = "warn";
         bar.append(fill);
         row.append(bar, el("span", "hint" + (pct >= 1 ? " bad" : ""), pct >= 1 ? `Over by ${peso(s-b)}` : `${peso(b-s)} left`));
+      }
+      if (open){
+        const items = el("div", "bitems");
+        const mine = list.filter(t => t.type === "expense" && t.cat === c).sort(newestFirst);
+        if (!mine.length) items.append(el("div", "none", "Nothing spent on this yet this month."));
+        mine.forEach(t => items.append(itemRow(t, t.note || c, [dayName(t.date), t.by, payName(t)])));
+        row.append(items);
       }
       bx.append(row);
     });
@@ -526,14 +558,22 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
       h.onclick = () => { view.openCard = view.openCard === g.id ? null : g.id; render(); };
       box.append(h);
       if (view.openCard === g.id){
+        if (g.items.length){
+          const byCat = {};
+          g.items.forEach(t => { const k = byCat[t.cat] = byCat[t.cat] || { total: 0, n: 0 }; k.total += t.amount; k.n++; });
+          const brk = el("div", "cbreak"); brk.append(el("span", "lbl", "By category"));
+          Object.entries(byCat).sort((a, b) => b[1].total - a[1].total).forEach(([cn, v]) => {
+            const r = el("div", "crow");
+            const nm = el("span", "cn", cn); nm.append(el("span", "by", ` · ${v.n} ${v.n === 1 ? "item" : "items"}`));
+            const bar = el("div", "bar"), fill = el("i"); fill.style.width = (total ? v.total / total * 100 : 0) + "%"; bar.append(fill);
+            r.append(nm, el("span", "cv", peso(v.total)), bar);
+            brk.append(r);
+          });
+          box.append(brk);
+        }
         const items = el("div", "citems");
         if (!g.items.length) items.append(el("div", "none", "Nothing swiped on this card this month."));
-        [...g.items].sort((a,b) => b.date.localeCompare(a.date) || (b.ts||0) - (a.ts||0)).forEach(t => {
-          const r = el("div", "citem");
-          r.append(el("span", "what", t.note || t.cat), el("span", "amt", peso(t.amount)),
-                   el("span", "meta", [dayName(t.date), t.note ? t.cat : "", t.by].filter(Boolean).join(" · ")));
-          items.append(r);
-        });
+        [...g.items].sort(newestFirst).forEach(t => items.append(itemRow(t, t.note || t.cat, [dayName(t.date), t.note ? t.cat : "", t.by])));
         box.append(items);
       }
       cardsEl.append(box);
@@ -580,7 +620,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
   }
 
   /* ---------- Month nav ---------- */
-  function shift(n){ const [y,m] = view.month.split("-").map(Number); const d = new Date(y, m-1+n, 1); view.month = `${d.getFullYear()}-${pad(d.getMonth()+1)}`; view.openTx = null; render(); }
+  function shift(n){ const [y,m] = view.month.split("-").map(Number); const d = new Date(y, m-1+n, 1); view.month = `${d.getFullYear()}-${pad(d.getMonth()+1)}`; view.openTx = null; view.openBudget = null; render(); }
   $("prev").onclick = () => shift(-1);
   $("next").onclick = () => shift(1);
 
