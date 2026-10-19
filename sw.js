@@ -1,6 +1,6 @@
 // Pitaka Budget service worker: caches the app so it opens offline.
 // Bump VERSION whenever you upload changed files.
-const VERSION = "pitaka-v7";
+const VERSION = "pitaka-v8";
 const SHELL = [
   "./",
   "./index.html",

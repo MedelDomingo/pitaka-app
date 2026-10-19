@@ -162,6 +162,11 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
 .citem .edit{color:var(--accent);font-size:.78rem;font-weight:600;grid-column:2;text-align:right}
 .delbtn{border:1px solid var(--bad);background:transparent;color:var(--bad);font-weight:700;border-radius:14px;padding:13px;font-size:.95rem;width:100%}
 .delbtn.armed{background:var(--bad);color:#fff}
+.sugg{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;margin-top:-6px;padding-bottom:2px}
+.sugg::-webkit-scrollbar{display:none}
+.sugg .lbl{flex:none;align-self:center;font-size:.72rem;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);font-weight:600}
+.sugg button{flex:none;border:1px solid var(--line);background:var(--surface);border-radius:99px;padding:7px 12px;font-size:.88rem;white-space:nowrap;max-width:220px;overflow:hidden;text-overflow:ellipsis}
+.sugg button:active{background:var(--soft)}
 .payhint{font-size:.82rem;color:var(--muted);margin:0}
 .cardset{display:flex;flex-direction:column;gap:12px}
 .cardedit{display:grid;grid-template-columns:minmax(0,1fr) 40px;gap:8px;padding:12px;border:1px solid var(--line);border-radius:14px;background:var(--bg)}
@@ -241,9 +246,10 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
       <div class="addcat" id="quickCard" hidden><input id="quickCardName" maxlength="30" placeholder="Card name, e.g. BPI Visa" autocomplete="off"><button type="button" id="quickCardAdd">Add</button></div>
       <p class="err" id="quickCardErr" hidden></p></div>
     <div class="row2">
-      <div class="field"><label class="label" for="note">Note</label><input id="note" placeholder="e.g. Jollibee lunch" maxlength="80"></div>
+      <div class="field"><label class="label" for="note">Note</label><input id="note" placeholder="e.g. Jollibee lunch" maxlength="80" autocomplete="off"></div>
       <div class="field"><label class="label" for="date">Date</label><input id="date" type="date"></div>
     </div>
+    <div class="sugg" id="noteSugg" hidden></div>
     <p class="err" id="addErr" hidden></p>
     <button class="primary" id="saveBtn" type="submit">Save</button>
     <button class="delbtn" id="delEntry" type="button" hidden>Delete entry</button>
@@ -658,7 +664,43 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
     c.append(nb);
     $("tExp").setAttribute("aria-pressed", String(type === "expense"));
     $("tInc").setAttribute("aria-pressed", String(type === "income"));
+    drawSugg();
   }
+
+  // Past notes for the chosen category, most used first, then most recent.
+  function noteHistory(filterCat){
+    const seen = new Map();
+    Object.values(data.tx).forEach(t => {
+      if (t.deleted || t.type !== type || !t.note || (filterCat && t.cat !== filterCat)) return;
+      const key = t.note.trim().toLowerCase(); if (!key) return;
+      const cur = seen.get(key) || { n: 0, last: 0, forms: {} };
+      const txt = t.note.trim(), f = cur.forms[txt] = cur.forms[txt] || { n: 0, last: 0 };
+      cur.n++; f.n++; f.last = Math.max(f.last, t.ts || 0); cur.last = Math.max(cur.last, t.ts || 0);
+      seen.set(key, cur);
+    });
+    // Show the spelling used most often (ties go to the most recent).
+    return [...seen.values()].map(h => {
+      const best = Object.entries(h.forms).sort((x, y) => y[1].n - x[1].n || y[1].last - x[1].last)[0][0];
+      return { text: best, n: h.n, last: h.last };
+    }).sort((a, b) => b.n - a.n || b.last - a.last);
+  }
+  function drawSugg(){
+    const box = $("noteSugg"); box.textContent = "";
+    const typed = $("note").value.trim().toLowerCase();
+    const match = h => h.text.toLowerCase() !== typed && (!typed || h.text.toLowerCase().includes(typed));
+    let list = noteHistory(cat).filter(match);
+    if (!list.length && typed) list = noteHistory(null).filter(match);
+    list = list.slice(0, 8);
+    box.hidden = !list.length;
+    if (!list.length) return;
+    box.append(el("span", "lbl", "Recent"));
+    list.forEach(h => {
+      const b = el("button", null, h.text); b.type = "button";
+      b.onclick = () => { $("note").value = h.text; drawSugg(); };
+      box.append(b);
+    });
+  }
+  $("note").addEventListener("input", drawSugg);
   $("tExp").onclick = () => { type = "expense"; $("quickCat").hidden = true; drawChips(); drawPay(); };
   $("tInc").onclick = () => { type = "income"; $("quickCat").hidden = true; drawChips(); drawPay(); };
 
