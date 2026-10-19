@@ -156,6 +156,12 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
 .crow .cn{font-weight:600;min-width:0;overflow-wrap:anywhere}
 .crow .cv{font-weight:700}
 .crow .bar{height:5px}
+.citem.tap{cursor:pointer}
+.citem.tap:active{background:var(--soft)}
+.citem.tap:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.citem .edit{color:var(--accent);font-size:.78rem;font-weight:600;grid-column:2;text-align:right}
+.delbtn{border:1px solid var(--bad);background:transparent;color:var(--bad);font-weight:700;border-radius:14px;padding:13px;font-size:.95rem;width:100%}
+.delbtn.armed{background:var(--bad);color:#fff}
 .payhint{font-size:.82rem;color:var(--muted);margin:0}
 .cardset{display:flex;flex-direction:column;gap:12px}
 .cardedit{display:grid;grid-template-columns:minmax(0,1fr) 40px;gap:8px;padding:12px;border:1px solid var(--line);border-radius:14px;background:var(--bg)}
@@ -240,6 +246,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
     </div>
     <p class="err" id="addErr" hidden></p>
     <button class="primary" id="saveBtn" type="submit">Save</button>
+    <button class="delbtn" id="delEntry" type="button" hidden>Delete entry</button>
   </form>
 </div>
 
@@ -341,9 +348,11 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
   const payName = t => isCardPay(t) ? (cardById(t.pay) || { name: "Removed card" }).name : "Cash";
   const newestFirst = (a, b) => b.date.localeCompare(a.date) || (b.ts||0) - (a.ts||0);
   function itemRow(t, title, metaParts){
-    const r = el("div", "citem");
+    const r = el("div", "citem tap"); r.tabIndex = 0; r.setAttribute("role", "button"); r.setAttribute("aria-label", `Edit ${title}, ${peso(t.amount)}`);
     r.append(el("span", "what", title), el("span", "amt", peso(t.amount)),
-             el("span", "meta", metaParts.filter(Boolean).join(" · ")));
+             el("span", "meta", metaParts.filter(Boolean).join(" · ")), el("span", "edit", "Edit"));
+    r.onclick = e => { e.stopPropagation(); openEntry(t.id); };
+    r.onkeydown = e => { if (e.key === "Enter" || e.key === " "){ e.preventDefault(); e.stopPropagation(); openEntry(t.id); } };
     return r;
   }
   function cleanCat(raw, list){
@@ -602,8 +611,8 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
           }
           if (view.openTx === t.id){
             const act = el("div", "tx-actions");
-            const cancel = el("button", null, "Cancel"), del = el("button", "del", "Delete");
-            cancel.onclick = e => { e.stopPropagation(); view.openTx = null; render(); };
+            const cancel = el("button", null, "Edit"), del = el("button", "del", "Delete");
+            cancel.onclick = e => { e.stopPropagation(); view.openTx = null; render(); openEntry(t.id); };
             del.onclick = e => { e.stopPropagation(); view.openTx = null;
               t.deleted = 1; t.mtime = Date.now(); markPending(t.id); save(); render(); scheduleSync(); toast("Deleted"); };
             act.append(cancel, del); row.append(act);
@@ -626,8 +635,8 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
 
   /* ---------- Sheets ---------- */
   let openSheet = null;
-  function show(id){ hide(); openSheet = $(id); $("scrim").hidden = false; openSheet.hidden = false; }
-  function hide(){ if (openSheet) openSheet.hidden = true; $("scrim").hidden = true; openSheet = null; }
+  function show(id){ const keep = editId; hide(); editId = keep; openSheet = $(id); $("scrim").hidden = false; openSheet.hidden = false; }
+  function hide(){ if (openSheet) openSheet.hidden = true; $("scrim").hidden = true; openSheet = null; editId = null; }
   $("scrim").onclick = hide;
   document.addEventListener("keydown", e => { if (e.key === "Escape") hide(); });
 
@@ -635,7 +644,8 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
   let type = "expense", cat = "Food";
   function drawChips(){
     const c = $("chips"); c.textContent = "";
-    const cats = type === "expense" ? expCats() : incCats();
+    const cats = [...(type === "expense" ? expCats() : incCats())];
+    if (editId && data.tx[editId] && data.tx[editId].type === type && !cats.includes(data.tx[editId].cat)) cats.push(data.tx[editId].cat);
     if (!cats.includes(cat)) cat = cats[0];
     cats.forEach(name => {
       const b = el("button", null, name); b.type = "button";
@@ -657,8 +667,10 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
     $("payField").hidden = type !== "expense";
     const c = $("payChips"); c.textContent = "";
     const cards = cardsList();
-    if (pay !== "cash" && !cards.some(x => x.id === pay)) pay = "cash";
-    [{ id: "cash", name: "Cash" }, ...cards].forEach(o => {
+    const orig = editId && data.tx[editId] ? data.tx[editId].pay : "";
+    const extra = orig && orig !== "cash" && !cards.some(x => x.id === orig) ? [{ id: orig, name: "Removed card" }] : [];
+    if (pay !== "cash" && !cards.some(x => x.id === pay) && pay !== orig) pay = "cash";
+    [{ id: "cash", name: "Cash" }, ...cards, ...extra].forEach(o => {
       const b = el("button", null, o.name); b.type = "button";
       b.setAttribute("aria-pressed", String(o.id === pay));
       b.onclick = () => { pay = o.id; drawPay(); };
@@ -705,7 +717,34 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
   $("quickCatAdd").onclick = quickAdd;
   $("quickCatName").addEventListener("keydown", e => { if (e.key === "Enter"){ e.preventDefault(); quickAdd(); } });
 
+  let editId = null, delArmed = null;
+  function sheetMode(){
+    $("addTitle").textContent = editId ? "Edit entry" : "New entry";
+    $("saveBtn").textContent = editId ? "Save changes" : "Save";
+    $("delEntry").hidden = !editId;
+    clearTimeout(delArmed); $("delEntry").classList.remove("armed"); $("delEntry").textContent = "Delete entry";
+  }
+  function openEntry(id){
+    const t = data.tx[id]; if (!t || t.deleted) return;
+    editId = id; type = t.type; cat = t.cat; pay = t.type === "expense" && t.pay ? t.pay : "cash";
+    $("amt").value = String(t.amount); $("note").value = t.note || ""; $("date").value = t.date;
+    $("quickCat").hidden = true; $("quickCatErr").hidden = true; $("quickCard").hidden = true; $("quickCardErr").hidden = true;
+    $("addErr").hidden = true; sheetMode(); drawChips(); drawPay(); show("addSheet");
+  }
+  $("delEntry").onclick = () => {
+    const t = editId && data.tx[editId]; if (!t) return;
+    const b = $("delEntry");
+    if (!b.classList.contains("armed")){
+      b.classList.add("armed"); b.textContent = "Tap again to delete";
+      delArmed = setTimeout(() => { b.classList.remove("armed"); b.textContent = "Delete entry"; }, 3000);
+      return;
+    }
+    t.deleted = 1; t.mtime = Date.now(); markPending(t.id); editId = null;
+    save(); hide(); render(); scheduleSync(); toast("Deleted");
+  };
+
   $("addBtn").onclick = () => {
+    editId = null; sheetMode();
     type = "expense"; $("quickCat").hidden = true; $("quickCatErr").hidden = true;
     $("amt").value = ""; $("note").value = "";
     $("date").value = view.month === today().slice(0,7) ? today() : view.month + "-01";
@@ -721,6 +760,15 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
     if (!(amount > 0)){ err.textContent = "Enter an amount greater than zero."; err.hidden = false; return; }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)){ err.textContent = "Pick a date."; err.hidden = false; return; }
     const now = Date.now();
+    if (editId && data.tx[editId]){
+      const t = data.tx[editId], before = Object.assign({}, t);
+      Object.assign(t, { type, amount, cat, note: $("note").value.trim(), date, pay: type === "expense" ? pay : "", mtime: now });
+      markPending(t.id);
+      if (!save()){ Object.assign(t, before); return; }
+      editId = null; hide(); view.month = date.slice(0,7); view.openTx = null; render(); scheduleSync();
+      toast("Changes saved");
+      return;
+    }
     const t = { id: newId(), type, amount, cat, note: $("note").value.trim(), date, ts: now, by: setup.name || "", pay: type === "expense" ? pay : "", mtime: now, deleted: 0 };
     data.tx[t.id] = t; markPending(t.id);
     if (!save()){ delete data.tx[t.id]; data.pending = data.pending.filter(x => x !== t.id); return; }
