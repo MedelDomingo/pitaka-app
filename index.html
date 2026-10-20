@@ -167,6 +167,24 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
 .sugg .lbl{flex:none;align-self:center;font-size:.72rem;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);font-weight:600}
 .sugg button{flex:none;border:1px solid var(--line);background:var(--surface);border-radius:99px;padding:7px 12px;font-size:.88rem;white-space:nowrap;max-width:220px;overflow:hidden;text-overflow:ellipsis}
 .sugg button:active{background:var(--soft)}
+.bsum{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+.bsum div{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:10px 12px}
+.bsum strong{display:block;font-size:1.1rem;font-weight:700}
+.bsum .sv strong{color:var(--accent)} .bsum .ov strong{color:var(--bad)}
+.bsum .zero strong{color:var(--muted)}
+.carrybox{background:var(--soft);border-radius:16px;padding:14px;margin-bottom:10px;display:flex;flex-direction:column;gap:10px}
+.carrybox h3{margin:0;font-family:var(--display);font-weight:600;font-size:1rem}
+.carrybox p{margin:0;font-size:.85rem;color:var(--muted)}
+.crow2{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 10px;align-items:center;background:var(--surface);border-radius:12px;padding:10px 12px}
+.crow2 .cn{font-weight:600;min-width:0;overflow-wrap:anywhere}
+.crow2 .res{font-size:.85rem;grid-column:1}
+.crow2 .res.sv{color:var(--accent)} .crow2 .res.ov{color:var(--bad)}
+.crow2 .btns{grid-row:1/3;grid-column:2;display:flex;gap:6px}
+.crow2 .btns button{border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:8px 10px;font-weight:600;font-size:.85rem}
+.crow2 .btns .go{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.carryall{border:0;background:var(--accent);color:var(--accent-ink);font-weight:700;border-radius:12px;padding:11px}
+.brow .carry{grid-column:1/-1;font-size:.78rem;color:var(--muted)}
+.brow .carry button{border:0;background:none;color:var(--accent);font-weight:600;padding:0 0 0 4px;font-size:.78rem}
 .payhint{font-size:.82rem;color:var(--muted);margin:0}
 .cardset{display:flex;flex-direction:column;gap:12px}
 .cardedit{display:grid;grid-template-columns:minmax(0,1fr) 40px;gap:8px;padding:12px;border:1px solid var(--line);border-radius:14px;background:var(--bg)}
@@ -211,6 +229,8 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
 
   <section>
     <div class="sec-h"><h2>Budgets</h2><button class="link" id="editBudgets">Edit budgets</button></div>
+    <div class="bsum" id="budgetSum" hidden></div>
+    <div class="carrybox" id="carryBox" hidden></div>
     <div class="budgets" id="budgets"></div>
   </section>
 
@@ -360,6 +380,31 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
     r.onclick = e => { e.stopPropagation(); openEntry(t.id); };
     r.onkeydown = e => { if (e.key === "Enter" || e.key === " "){ e.preventDefault(); e.stopPropagation(); openEntry(t.id); } };
     return r;
+  }
+  // ---- Budget carry-over ----
+  // __carry = { "2026-11": { "M&M Allowance": -1000, "Groceries": 2500, "Food": 0 } }
+  // A number means a decision was made for that month (0 = skipped).
+  const CARRY_FROM = "2026-10";   // first month whose result can be carried forward
+  const shiftMonth = (ym, n) => { const [y, m] = ym.split("-").map(Number); const d = new Date(y, m - 1 + n, 1); return `${d.getFullYear()}-${pad(d.getMonth()+1)}`; };
+  const shortMonth = ym => { const [y, m] = ym.split("-").map(Number); return new Date(y, m - 1, 1).toLocaleDateString("en-PH", { month: "short" }); };
+  const longMonth = ym => { const [y, m] = ym.split("-").map(Number); return new Date(y, m - 1, 1).toLocaleDateString("en-PH", { month: "long" }); };
+  const carryMap = () => { const c = data.budgets.__carry; return c && typeof c === "object" && !Array.isArray(c) ? c : {}; };
+  const baseBudget = c => { const v = data.budgets[c]; return typeof v === "number" && v > 0 ? v : 0; };
+  const adjOf = (c, ym) => { const v = (carryMap()[ym] || {})[c]; return typeof v === "number" ? v : 0; };
+  const decided = (c, ym) => typeof (carryMap()[ym] || {})[c] === "number";
+  const effBudget = (c, ym) => baseBudget(c) ? Math.max(0, baseBudget(c) + adjOf(c, ym)) : 0;
+  const r2 = n => Math.round(n * 100) / 100;
+  function monthResults(ym){
+    const sp = {};
+    live().forEach(t => { if (t.type === "expense" && (t.date || "").startsWith(ym)) sp[t.cat] = (sp[t.cat] || 0) + t.amount; });
+    const cats = [...new Set([...expCats(), ...Object.keys(data.budgets).filter(k => !k.startsWith("__"))])];
+    return cats.filter(c => baseBudget(c)).map(c => { const b = effBudget(c, ym), s2 = sp[c] || 0; return { c, b, s: s2, diff: r2(b - s2) }; });
+  }
+  function setCarry(ym, changes){
+    const all = Object.assign({}, carryMap()), m = Object.assign({}, all[ym] || {});
+    Object.entries(changes).forEach(([c, v]) => { if (v === null) delete m[c]; else m[c] = v; });
+    if (Object.keys(m).length) all[ym] = m; else delete all[ym];
+    commitBudgets(Object.assign({}, data.budgets, { __carry: all }));
   }
   function cleanCat(raw, list){
     const name = String(raw || "").trim().replace(/\s+/g, " ");
@@ -517,7 +562,45 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
     list.filter(t => t.type === "expense").forEach(t => spentBy[t.cat] = (spentBy[t.cat]||0) + t.amount);
     const ec = expCats();
     const allCats = [...ec, ...Object.keys(spentBy).filter(c => !ec.includes(c))];
-    const cats = allCats.filter(c => data.budgets[c] > 0 || spentBy[c] > 0);
+    const cats = allCats.filter(c => baseBudget(c) > 0 || spentBy[c] > 0);
+    const curMonth = today().slice(0, 7), isCurrent = view.month === curMonth;
+
+    // Saved / over totals for this month
+    const res = monthResults(view.month);
+    const saved = r2(res.reduce((a, r) => a + Math.max(0, r.diff), 0)), over = r2(res.reduce((a, r) => a + Math.max(0, -r.diff), 0));
+    const sum = $("budgetSum"); sum.textContent = ""; sum.hidden = !res.length || view.month > curMonth;
+    if (!sum.hidden){
+      const a = el("div", "sv" + (saved ? "" : " zero")), o = el("div", "ov" + (over ? "" : " zero"));
+      a.append(el("span", "label", isCurrent ? "Unused so far" : "Saved"), el("strong", null, peso(saved)));
+      o.append(el("span", "label", "Over budget"), el("strong", null, peso(over)));
+      sum.append(a, o);
+    }
+
+    // Carry last month's result into this month
+    const prev = shiftMonth(view.month, -1), cb = $("carryBox"); cb.textContent = "";
+    const pending = (prev >= CARRY_FROM && view.month <= curMonth) ? monthResults(prev).filter(r => r.diff !== 0 && !decided(r.c, view.month)) : [];
+    cb.hidden = !pending.length;
+    if (pending.length){
+      cb.append(el("h3", null, `${longMonth(prev)} results`),
+                el("p", null, `Carry each result into ${longMonth(view.month)}: add what you saved, or deduct what you went over.`));
+      pending.forEach(r => {
+        const row = el("div", "crow2"), btns = el("div", "btns");
+        const go = el("button", "go", r.diff > 0 ? "Add" : "Deduct"), skip = el("button", null, "Skip");
+        go.type = skip.type = "button";
+        go.onclick = () => { setCarry(view.month, { [r.c]: r.diff }); toast(`${r.diff > 0 ? "Added" : "Deducted"} ${peso(Math.abs(r.diff))} ${r.diff > 0 ? "to" : "from"} ${r.c}`); };
+        skip.onclick = () => setCarry(view.month, { [r.c]: 0 });
+        btns.append(go, skip);
+        row.append(el("span", "cn", r.c), btns,
+                   el("span", "res " + (r.diff > 0 ? "sv" : "ov"), r.diff > 0 ? `Saved ${peso(r.diff)}` : `Over by ${peso(-r.diff)}`));
+        cb.append(row);
+      });
+      if (pending.length > 1){
+        const all = el("button", "carryall", "Apply all"); all.type = "button";
+        all.onclick = () => { const ch = {}; pending.forEach(r => ch[r.c] = r.diff); setCarry(view.month, ch); toast("Applied to " + longMonth(view.month)); };
+        cb.append(all);
+      }
+    }
+
     const bx = $("budgets"); bx.textContent = "";
     if (!cats.length){
       const e = el("div", "empty"); e.style.border = "0"; e.style.padding = "8px";
@@ -525,21 +608,27 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
       bx.append(e);
     }
     cats.forEach(c => {
-      const b = data.budgets[c] || 0, s = spentBy[c] || 0;
+      const has = baseBudget(c) > 0, b = effBudget(c, view.month), s = spentBy[c] || 0, adj = adjOf(c, view.month);
       const open = view.openBudget === c;
       const row = el("div", "brow tap" + (open ? " open" : "")); row.tabIndex = 0; row.setAttribute("role", "button"); row.setAttribute("aria-expanded", String(open));
-      const amt = el("span", "amt"); amt.append(el("b", null, peso(s)), b ? " / " + peso(b) : " spent");
+      const amt = el("span", "amt"); amt.append(el("b", null, peso(s)), has ? " / " + peso(b) : " spent");
       const nm = el("span", "name", c); nm.append(el("span", "chev", "›"));
       row.append(nm, amt);
       const toggle = () => { view.openBudget = open ? null : c; render(); };
       row.onclick = e => { if (!e.target.closest(".bitems")) toggle(); };
       row.onkeydown = e => { if (e.target === row && (e.key === "Enter" || e.key === " ")){ e.preventDefault(); toggle(); } };
-      if (b){
-        const pct = s / b, bar = el("div", "bar"), fill = el("i");
+      if (has){
+        const pct = b ? s / b : (s > 0 ? 1 : 0), bar = el("div", "bar"), fill = el("i");
         fill.style.width = Math.min(100, pct*100) + "%";
         if (pct >= 1) fill.className = "bad"; else if (pct >= .8) fill.className = "warn";
         bar.append(fill);
-        row.append(bar, el("span", "hint" + (pct >= 1 ? " bad" : ""), pct >= 1 ? `Over by ${peso(s-b)}` : `${peso(b-s)} left`));
+        row.append(bar, el("span", "hint" + (s > b ? " bad" : ""), s > b ? `Over by ${peso(s-b)}` : `${peso(b-s)} left`));
+        if (adj){
+          const cr = el("span", "carry", `Includes ${adj > 0 ? "+" : "−"}${peso(Math.abs(adj))} from ${shortMonth(shiftMonth(view.month, -1))}`);
+          const undo = el("button", null, "Undo"); undo.type = "button";
+          undo.onclick = e => { e.stopPropagation(); setCarry(view.month, { [c]: null }); };
+          cr.append(undo); row.append(cr);
+        }
       }
       if (open){
         const items = el("div", "bitems");
