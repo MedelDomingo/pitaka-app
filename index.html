@@ -43,7 +43,12 @@ button{font:inherit;color:inherit;cursor:pointer}
 button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 
 .month{display:flex;align-items:center;justify-content:space-between;gap:8px}
-.month h1{font-family:var(--display);font-weight:600;font-size:1.05rem;margin:0;letter-spacing:.01em;text-align:center;flex:1}
+.month h1{font-family:var(--display);font-weight:600;font-size:1.05rem;margin:0;letter-spacing:.01em;text-align:center;flex:1;display:flex;flex-direction:column;line-height:1.25}
+.month h1 small{font-family:var(--body);font-weight:500;font-size:.75rem;color:var(--muted);letter-spacing:0}
+.startday{display:grid;grid-template-columns:minmax(0,1fr) 84px;gap:10px;align-items:center;background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+.startday label{font-weight:600}
+.startday span{grid-column:1/-1;font-size:.8rem;color:var(--muted)}
+.startday input{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:10px;padding:10px;font:inherit;font-size:16px;text-align:center;width:100%}
 .iconbtn{width:40px;height:40px;border-radius:12px;border:1px solid var(--line);background:var(--surface);display:grid;place-items:center;font-size:1.1rem;flex:none}
 .month .right{display:flex;gap:8px}
 
@@ -281,6 +286,8 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
     <div class="grab"></div>
     <h2 id="bTitle">Categories &amp; budgets</h2>
     <p class="muted">Set a monthly limit, or leave it blank to just track spending. Removing a category keeps its past entries.</p>
+    <div class="startday"><label for="startDay">Budget month starts on day</label><input id="startDay" type="number" inputmode="numeric" min="1" max="28" step="1">
+      <span id="startDayHint">Use your payday or cutoff, e.g. 15 means October runs Oct 15 to Nov 14.</span></div>
     <h3 class="sub">Expenses</h3>
     <div class="bset" id="bset"></div>
     <div class="addcat"><input id="newExp" maxlength="30" placeholder="Add expense category, e.g. Baby" autocomplete="off"><button type="button" id="newExpBtn">Add</button></div>
@@ -384,7 +391,19 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
   // ---- Budget carry-over ----
   // __carry = { "2026-11": { "M&M Allowance": -1000, "Groceries": 2500, "Food": 0 } }
   // A number means a decision was made for that month (0 = skipped).
-  const CARRY_FROM = "2026-10";   // first month whose result can be carried forward
+  const CARRY_FROM = "2026-10";
+  // ---- Budget periods ----
+  // With start day 15, the "October" period runs Oct 15 to Nov 14. Start day 1 = calendar months.
+  const startDay = () => { const v = data.budgets.__startDay; return Number.isInteger(v) && v >= 1 && v <= 28 ? v : 1; };
+  const periodOf = d => { const [y, m, dd] = d.split("-").map(Number); const ym = `${y}-${pad(m)}`; return dd >= startDay() ? ym : shiftMonth(ym, -1); };
+  const curPeriod = () => periodOf(today());
+  const inPeriod = (d, ym) => !!d && /^\d{4}-\d{2}-\d{2}$/.test(d) && periodOf(d) === ym;
+  const periodStart = ym => `${ym}-${pad(startDay())}`;
+  function periodRange(ym){
+    const sd = startDay(); if (sd === 1) return "";
+    const [y, m] = ym.split("-").map(Number), f = { month: "short", day: "numeric" };
+    return `${new Date(y, m - 1, sd).toLocaleDateString("en-PH", f)} – ${new Date(y, m, sd - 1).toLocaleDateString("en-PH", f)}`;
+  }   // first month whose result can be carried forward
   const shiftMonth = (ym, n) => { const [y, m] = ym.split("-").map(Number); const d = new Date(y, m - 1 + n, 1); return `${d.getFullYear()}-${pad(d.getMonth()+1)}`; };
   const shortMonth = ym => { const [y, m] = ym.split("-").map(Number); return new Date(y, m - 1, 1).toLocaleDateString("en-PH", { month: "short" }); };
   const longMonth = ym => { const [y, m] = ym.split("-").map(Number); return new Date(y, m - 1, 1).toLocaleDateString("en-PH", { month: "long" }); };
@@ -396,7 +415,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
   const r2 = n => Math.round(n * 100) / 100;
   function monthResults(ym){
     const sp = {};
-    live().forEach(t => { if (t.type === "expense" && (t.date || "").startsWith(ym)) sp[t.cat] = (sp[t.cat] || 0) + t.amount; });
+    live().forEach(t => { if (t.type === "expense" && inPeriod(t.date, ym)) sp[t.cat] = (sp[t.cat] || 0) + t.amount; });
     const cats = [...new Set([...expCats(), ...Object.keys(data.budgets).filter(k => !k.startsWith("__"))])];
     return cats.filter(c => baseBudget(c)).map(c => { const b = effBudget(c, ym), s2 = sp[c] || 0; return { c, b, s: s2, diff: r2(b - s2) }; });
   }
@@ -547,10 +566,12 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
   }
 
   function render(){
-    const list = live().filter(t => (t.date||"").startsWith(view.month));
+    if (view.sd !== startDay()){ if (view.sd !== undefined) view.month = curPeriod(); view.sd = startDay(); }
+    const list = live().filter(t => inPeriod(t.date, view.month));
     const inc = list.filter(t => t.type === "income").reduce((s,t) => s + t.amount, 0);
     const exp = list.filter(t => t.type === "expense").reduce((s,t) => s + t.amount, 0);
     $("monthLabel").textContent = monthName(view.month);
+    const rng = periodRange(view.month); if (rng) $("monthLabel").append(el("small", null, rng));
     $("inc").textContent = peso(inc);
     $("exp").textContent = peso(exp);
     const left = Math.round((inc - exp) * 100) / 100;
@@ -563,7 +584,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
     const ec = expCats();
     const allCats = [...ec, ...Object.keys(spentBy).filter(c => !ec.includes(c))];
     const cats = allCats.filter(c => baseBudget(c) > 0 || spentBy[c] > 0);
-    const curMonth = today().slice(0, 7), isCurrent = view.month === curMonth;
+    const curMonth = curPeriod(), isCurrent = view.month === curMonth;
 
     // Saved / over totals for this month
     const res = monthResults(view.month);
@@ -878,7 +899,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
     editId = null; sheetMode();
     type = "expense"; $("quickCat").hidden = true; $("quickCatErr").hidden = true;
     $("amt").value = ""; $("note").value = "";
-    $("date").value = view.month === today().slice(0,7) ? today() : view.month + "-01";
+    $("date").value = view.month === curPeriod() ? today() : periodStart(view.month);
     pay = "cash"; $("quickCard").hidden = true; $("quickCardErr").hidden = true;
     $("addErr").hidden = true; drawChips(); drawPay(); show("addSheet");
     setTimeout(() => $("amt").focus(), 60);
@@ -896,14 +917,14 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
       Object.assign(t, { type, amount, cat, note: $("note").value.trim(), date, pay: type === "expense" ? pay : "", mtime: now });
       markPending(t.id);
       if (!save()){ Object.assign(t, before); return; }
-      editId = null; hide(); view.month = date.slice(0,7); view.openTx = null; render(); scheduleSync();
+      editId = null; hide(); view.month = periodOf(date); view.openTx = null; render(); scheduleSync();
       toast("Changes saved");
       return;
     }
     const t = { id: newId(), type, amount, cat, note: $("note").value.trim(), date, ts: now, by: setup.name || "", pay: type === "expense" ? pay : "", mtime: now, deleted: 0 };
     data.tx[t.id] = t; markPending(t.id);
     if (!save()){ delete data.tx[t.id]; data.pending = data.pending.filter(x => x !== t.id); return; }
-    hide(); view.month = date.slice(0,7); render(); scheduleSync();
+    hide(); view.month = periodOf(date); render(); scheduleSync();
     const card = type === "expense" && cardById(pay);
     toast(type === "expense" ? `Logged ${peso(amount)} for ${cat}${card ? " on " + card.name : ""}` : `Added ${peso(amount)} income`);
   });
@@ -945,15 +966,18 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
   $("editBudgets").onclick = () => {
     const amt = {}; Object.keys(data.budgets).forEach(k => { if (!k.startsWith("__")) amt[k] = String(data.budgets[k]); });
     work = { exp: [...expCats()], inc: [...incCats()], amt };
-    $("newExp").value = ""; $("newInc").value = ""; $("catErr").hidden = true;
+    $("newExp").value = ""; $("newInc").value = ""; $("catErr").hidden = true; $("startDay").value = String(startDay());
     drawBudgetSheet(); show("budgetSheet");
   };
   $("budgetForm").addEventListener("submit", e => {
     e.preventDefault();
     readAmounts();
+    const sdv = Number($("startDay").value);
+    if (!Number.isInteger(sdv) || sdv < 1 || sdv > 28){ $("catErr").textContent = "Pick a start day from 1 to 28."; $("catErr").hidden = false; return; }
     const b = {};
     Object.keys(data.budgets).forEach(k => { if (k.startsWith("__")) b[k] = data.budgets[k]; });
     b.__exp = work.exp; b.__inc = work.inc;
+    if (sdv === 1) delete b.__startDay; else b.__startDay = sdv;
     work.exp.forEach(c => { const v = parseFloat(String(work.amt[c] || "").replace(/[,₱\s]/g, "")); if (v > 0) b[c] = Math.round(v); });
     commitBudgets(b); hide(); toast("Saved");
   });
@@ -1119,7 +1143,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
   let tt; function toast(msg){ const t = $("toast"); t.textContent = msg; t.hidden = false; clearTimeout(tt); tt = setTimeout(() => t.hidden = true, 2400); }
 
   /* ---------- Boot ---------- */
-  load(); render();
+  load(); view.month = curPeriod(); view.sd = startDay(); render();
   const m = location.hash.match(/^#join=([^&]+)/);
   if (m) {
     const k = decodeURIComponent(m[1]);
