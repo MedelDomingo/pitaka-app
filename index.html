@@ -168,6 +168,11 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
 .sugg button{flex:none;border:1px solid var(--line);background:var(--surface);border-radius:99px;padding:7px 12px;font-size:.88rem;white-space:nowrap;max-width:220px;overflow:hidden;text-overflow:ellipsis}
 .sugg button:active{background:var(--soft)}
 .payhint{font-size:.82rem;color:var(--muted);margin:0}
+.bsum{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+.bsum div{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:10px 12px}
+.bsum strong{display:block;font-size:1.1rem;font-weight:700}
+.bsum .sv strong{color:var(--accent)} .bsum .ov strong{color:var(--bad)}
+.bsum .zero strong{color:var(--muted)}
 .cardset{display:flex;flex-direction:column;gap:12px}
 .cardedit{display:grid;grid-template-columns:minmax(0,1fr) 40px;gap:8px;padding:12px;border:1px solid var(--line);border-radius:14px;background:var(--bg)}
 .cardedit input{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:10px;padding:10px;font:inherit;font-size:16px;width:100%;min-width:0}
@@ -211,6 +216,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
 
   <section>
     <div class="sec-h"><h2>Budgets</h2><button class="link" id="editBudgets">Edit budgets</button></div>
+    <div class="bsum" id="budgetSum" hidden></div>
     <div class="budgets" id="budgets"></div>
   </section>
 
@@ -518,6 +524,20 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
     const ec = expCats();
     const allCats = [...ec, ...Object.keys(spentBy).filter(c => !ec.includes(c))];
     const cats = allCats.filter(c => data.budgets[c] > 0 || spentBy[c] > 0);
+    // Saved / over totals across categories that have a budget
+    const curMonth = today().slice(0, 7);
+    let saved = 0, over = 0, budgeted = 0;
+    cats.forEach(c => { const bb = data.budgets[c] > 0 ? data.budgets[c] : 0; if (!bb) return; budgeted++;
+      const d = bb - (spentBy[c] || 0); if (d > 0) saved += d; else over -= d; });
+    saved = Math.round(saved * 100) / 100; over = Math.round(over * 100) / 100;
+    const sum = $("budgetSum"); sum.textContent = ""; sum.hidden = !budgeted || view.month > curMonth;
+    if (!sum.hidden){
+      const a = el("div", "sv" + (saved ? "" : " zero")), o = el("div", "ov" + (over ? "" : " zero"));
+      a.append(el("span", "label", view.month === curMonth ? "Unused so far" : "Saved"), el("strong", null, peso(saved)));
+      o.append(el("span", "label", "Over budget"), el("strong", null, peso(over)));
+      sum.append(a, o);
+    }
+
     const bx = $("budgets"); bx.textContent = "";
     if (!cats.length){
       const e = el("div", "empty"); e.style.border = "0"; e.style.padding = "8px";
