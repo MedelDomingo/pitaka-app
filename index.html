@@ -43,7 +43,8 @@ button{font:inherit;color:inherit;cursor:pointer}
 button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 
 .month{display:flex;align-items:center;justify-content:space-between;gap:8px}
-.month h1{font-family:var(--display);font-weight:600;font-size:1.05rem;margin:0;letter-spacing:.01em;text-align:center;flex:1}
+.month h1{font-family:var(--display);font-weight:600;font-size:1.05rem;margin:0;letter-spacing:.01em;text-align:center;flex:1;display:flex;flex-direction:column;line-height:1.25}
+.month h1 small{font-family:var(--body);font-weight:500;font-size:.75rem;color:var(--muted);letter-spacing:0}
 .iconbtn{width:40px;height:40px;border-radius:12px;border:1px solid var(--line);background:var(--surface);display:grid;place-items:center;font-size:1.1rem;flex:none}
 .month .right{display:flex;gap:8px}
 
@@ -390,7 +391,20 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
   // data.tx is a map of id -> entry. Deleted entries stay as tombstones so the delete syncs.
   let data = { tx: {}, budgets: {}, budgetsMtime: 0, budgetsDirty: false, pending: [], lastNow: 0, lastSyncAt: 0, lastBackup: null };
   let setup = { name: "", key: "", skipped: false };
-  let view = { month: today().slice(0,7), openTx: null };
+  // ---- Budget periods ----
+  // Salary comes in on the 15th, so each budget month runs from the 15th to the 14th:
+  // "October" = Oct 15 to Nov 14. Entries keep their real dates.
+  const PERIOD_START = 15;
+  const shiftMonth = (ym, n) => { const [y, m] = ym.split("-").map(Number); const d = new Date(y, m - 1 + n, 1); return `${d.getFullYear()}-${pad(d.getMonth()+1)}`; };
+  const periodOf = d => { const [y, m, dd] = d.split("-").map(Number); const ym = `${y}-${pad(m)}`; return dd >= PERIOD_START ? ym : shiftMonth(ym, -1); };
+  const curPeriod = () => periodOf(today());
+  const inPeriod = (d, ym) => !!d && /^\d{4}-\d{2}-\d{2}$/.test(d) && periodOf(d) === ym;
+  const periodStart = ym => `${ym}-${pad(PERIOD_START)}`;
+  function periodRange(ym){
+    const [y, m] = ym.split("-").map(Number), f = { month: "short", day: "numeric" };
+    return `${new Date(y, m - 1, PERIOD_START).toLocaleDateString("en-PH", f)} – ${new Date(y, m, PERIOD_START - 1).toLocaleDateString("en-PH", f)}`;
+  }
+  let view = { month: curPeriod(), openTx: null };
   let sync$ = { busy: false, again: false, state: "off", keyBad: false };
 
   /* ---------- Local storage ---------- */
@@ -508,10 +522,11 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
   }
 
   function render(){
-    const list = live().filter(t => (t.date||"").startsWith(view.month));
+    const list = live().filter(t => inPeriod(t.date, view.month));
     const inc = list.filter(t => t.type === "income").reduce((s,t) => s + t.amount, 0);
     const exp = list.filter(t => t.type === "expense").reduce((s,t) => s + t.amount, 0);
     $("monthLabel").textContent = monthName(view.month);
+    $("monthLabel").append(el("small", null, periodRange(view.month)));
     $("inc").textContent = peso(inc);
     $("exp").textContent = peso(exp);
     const left = Math.round((inc - exp) * 100) / 100;
@@ -525,7 +540,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
     const allCats = [...ec, ...Object.keys(spentBy).filter(c => !ec.includes(c))];
     const cats = allCats.filter(c => data.budgets[c] > 0 || spentBy[c] > 0);
     // Saved / over totals across categories that have a budget
-    const curMonth = today().slice(0, 7);
+    const curMonth = curPeriod();
     let saved = 0, over = 0, budgeted = 0;
     cats.forEach(c => { const bb = data.budgets[c] > 0 ? data.budgets[c] : 0; if (!bb) return; budgeted++;
       const d = bb - (spentBy[c] || 0); if (d > 0) saved += d; else over -= d; });
@@ -809,7 +824,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
     editId = null; sheetMode();
     type = "expense"; $("quickCat").hidden = true; $("quickCatErr").hidden = true;
     $("amt").value = ""; $("note").value = "";
-    $("date").value = view.month === today().slice(0,7) ? today() : view.month + "-01";
+    $("date").value = view.month === curPeriod() ? today() : periodStart(view.month);
     pay = "cash"; $("quickCard").hidden = true; $("quickCardErr").hidden = true;
     $("addErr").hidden = true; drawChips(); drawPay(); show("addSheet");
     setTimeout(() => $("amt").focus(), 60);
@@ -827,14 +842,14 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
       Object.assign(t, { type, amount, cat, note: $("note").value.trim(), date, pay: type === "expense" ? pay : "", mtime: now });
       markPending(t.id);
       if (!save()){ Object.assign(t, before); return; }
-      editId = null; hide(); view.month = date.slice(0,7); view.openTx = null; render(); scheduleSync();
+      editId = null; hide(); view.month = periodOf(date); view.openTx = null; render(); scheduleSync();
       toast("Changes saved");
       return;
     }
     const t = { id: newId(), type, amount, cat, note: $("note").value.trim(), date, ts: now, by: setup.name || "", pay: type === "expense" ? pay : "", mtime: now, deleted: 0 };
     data.tx[t.id] = t; markPending(t.id);
     if (!save()){ delete data.tx[t.id]; data.pending = data.pending.filter(x => x !== t.id); return; }
-    hide(); view.month = date.slice(0,7); render(); scheduleSync();
+    hide(); view.month = periodOf(date); render(); scheduleSync();
     const card = type === "expense" && cardById(pay);
     toast(type === "expense" ? `Logged ${peso(amount)} for ${cat}${card ? " on " + card.name : ""}` : `Added ${peso(amount)} income`);
   });
