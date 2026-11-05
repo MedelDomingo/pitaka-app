@@ -229,7 +229,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
 .sep{border:0;border-top:1px solid var(--line);margin:4px 0}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(90px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:12px;font-weight:600;z-index:20;font-size:.9rem;max-width:calc(100% - 32px);text-align:center}
 .view{display:flex;flex-direction:column;gap:22px}
-.tabs{display:grid;grid-template-columns:1fr 1fr;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:4px;gap:4px;margin-top:-8px}
+.tabs{display:grid;grid-template-columns:1fr 1fr 1fr;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:4px;gap:4px;margin-top:-8px}
 .tabs button{border:0;background:none;padding:10px;border-radius:10px;font-weight:700;color:var(--muted)}
 .tabs button[aria-selected="true"]{background:var(--accent);color:var(--accent-ink)}
 .ihero{display:flex;flex-direction:column;gap:4px}
@@ -278,6 +278,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
   <button class="status" id="status" type="button"><i></i><span id="statusText">Not connected</span></button>
   <div class="tabs" role="tablist" aria-label="View">
     <button type="button" role="tab" id="tabBudget" aria-selected="true" aria-controls="budgetView">Budget</button>
+    <button type="button" role="tab" id="tabAllowance" aria-selected="false" aria-controls="allowanceView">Allowance</button>
     <button type="button" role="tab" id="tabInsights" aria-selected="false" aria-controls="insightsView">Insights</button>
   </div>
 
@@ -297,16 +298,6 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
     <div id="billsBox"></div>
   </section>
 
-  <section id="dailySec" hidden>
-    <div class="sec-h"><h2>Daily allowance</h2><span class="label" id="dailyNote"></span></div>
-    <div class="daily" id="daily"></div>
-  </section>
-
-  <section id="asaveSec" hidden>
-    <div class="sec-h"><h2>Allowance savings</h2></div>
-    <div class="asave" id="asave"></div>
-  </section>
-
   <section>
     <div class="sec-h"><h2>Budgets</h2><button class="link" id="editBudgets">Edit budgets</button></div>
     <div class="bsum" id="budgetSum" hidden></div>
@@ -322,6 +313,20 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
     <div class="sec-h"><h2>Transactions</h2><span class="label" id="count"></span></div>
     <div id="ledger"></div>
   </section>
+  </div>
+
+  <div class="view" id="allowanceView" role="tabpanel" aria-labelledby="tabAllowance" hidden>
+    <section id="dailySec" hidden>
+    <div class="sec-h"><h2>Daily allowance</h2><span class="label" id="dailyNote"></span></div>
+    <div class="daily" id="daily"></div>
+    </section>
+
+    <section id="asaveSec" hidden>
+    <div class="sec-h"><h2>Allowance savings</h2></div>
+    <div class="asave" id="asave"></div>
+    </section>
+
+    <div class="empty" id="allowEmpty" hidden></div>
   </div>
 
   <div class="view" id="insightsView" role="tabpanel" aria-labelledby="tabInsights" hidden>
@@ -796,6 +801,12 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
         cur.total >= 0 ? "good" : "bad", cur.rows.map(x => ({ label: x.c, val: signedP(x.diff), tone: x.diff >= 0 ? "good" : "bad" })));
     }
 
+    const ae = $("allowEmpty"); ae.textContent = ""; ae.hidden = !(dsec.hidden && asec.hidden);
+    if (!ae.hidden){
+      if (!aCats.length) ae.append(el("strong", null, "No allowance budgets yet"), "Set a budget for M&M Allowance, Office Allowance, or any category with \"Allowance\" in its name. Your daily limit and savings will show here.");
+      else ae.append(el("strong", null, "Nothing to show for this month"), view.month > curMonth ? "This month hasn't started yet." : "No allowance spending recorded for this month.");
+    }
+
     const bx = $("budgets"); bx.textContent = "";
     if (!cats.length){
       const e = el("div", "empty"); e.style.border = "0"; e.style.padding = "8px";
@@ -1099,16 +1110,19 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
     $("iTrend").innerHTML = svg + `<span class="label" style="text-transform:none;letter-spacing:0;font-weight:500">* this month so far. Each month runs from the 15th to the 14th.</span>`;
   }
 
+  const TABS = ["budget", "allowance", "insights"];
   function setTab(t){
-    view.tab = t === "insights" ? "insights" : "budget";
-    $("budgetView").hidden = view.tab !== "budget"; $("insightsView").hidden = view.tab !== "insights";
+    view.tab = TABS.includes(t) ? t : "budget";
+    $("budgetView").hidden = view.tab !== "budget"; $("allowanceView").hidden = view.tab !== "allowance"; $("insightsView").hidden = view.tab !== "insights";
     $("tabBudget").setAttribute("aria-selected", String(view.tab === "budget"));
+    $("tabAllowance").setAttribute("aria-selected", String(view.tab === "allowance"));
     $("tabInsights").setAttribute("aria-selected", String(view.tab === "insights"));
     try { localStorage.setItem("pitaka-tab", view.tab); } catch(e){}
     renderInsights();
   }
   $("tabBudget").onclick = () => setTab("budget");
   $("tabInsights").onclick = () => setTab("insights");
+  $("tabAllowance").onclick = () => setTab("allowance");
 
   /* ---------- Month nav ---------- */
   function shift(n){ const [y,m] = view.month.split("-").map(Number); const d = new Date(y, m-1+n, 1); view.month = `${d.getFullYear()}-${pad(d.getMonth()+1)}`; view.openTx = null; view.openBudget = null; render(); }
@@ -1604,7 +1618,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
   let tt; function toast(msg){ const t = $("toast"); t.textContent = msg; t.hidden = false; clearTimeout(tt); tt = setTimeout(() => t.hidden = true, 2400); }
 
   /* ---------- Boot ---------- */
-  load(); try { view.tab = localStorage.getItem("pitaka-tab") === "insights" ? "insights" : "budget"; } catch(e){ view.tab = "budget"; }
+  load(); try { view.tab = localStorage.getItem("pitaka-tab") || "budget"; } catch(e){ view.tab = "budget"; }
   render(); setTab(view.tab);
   const m = location.hash.match(/^#join=([^&]+)/);
   if (m) {
