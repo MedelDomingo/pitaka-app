@@ -239,9 +239,13 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
 .fact{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px 14px;display:flex;flex-direction:column;gap:4px}
 .fact .tag{font-size:.7rem;text-transform:uppercase;letter-spacing:.09em;font-weight:700;color:var(--muted)}
 .fact.bad .tag{color:var(--bad)} .fact.good .tag{color:var(--accent)}
-.fact p{margin:0;font-size:.95rem;line-height:1.45}
-.fact p b{font-weight:700}
-.fact p + p{padding-top:6px;border-top:1px solid var(--line);margin-top:2px}
+.fact .fv{font-family:var(--display);font-weight:800;font-size:1.35rem;line-height:1.2;overflow-wrap:anywhere}
+.fact.bad .fv{color:var(--bad)} .fact.good .fv{color:var(--accent)}
+.fact .fs{font-size:.85rem;color:var(--muted)}
+.frow{display:flex;justify-content:space-between;gap:12px;font-size:.95rem;padding:4px 0}
+.frow span{min-width:0;overflow-wrap:anywhere}
+.frow b{white-space:nowrap}
+.frow.bad b{color:var(--bad)} .frow.good b{color:var(--accent)}
 .chartcard{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:14px}
 .donutwrap{display:flex;justify-content:center}
 .donutwrap svg{width:200px;max-width:100%;height:auto}
@@ -323,7 +327,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
       <span class="sub" id="iSub"></span>
     </section>
     <section>
-      <div class="sec-h"><h2>What this means</h2></div>
+      <div class="sec-h"><h2>Summary</h2></div>
       <ul class="facts" id="iFacts"></ul>
     </section>
     <section id="iWhereSec">
@@ -916,7 +920,6 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
   }
   function byCat(txs){ const o = {}; txs.forEach(t => o[t.cat] = (o[t.cat] || 0) + t.amount); return o; }
   const sumOf = txs => Math.round(txs.reduce((a, t) => a + t.amount, 0) * 100) / 100;
-  function textWith(parts){ const p = el("p"); parts.forEach(x => p.append(typeof x === "string" ? x : el("b", null, x.b))); return p; }
 
   function renderInsights(){
     if (view.tab !== "insights") return;
@@ -927,49 +930,49 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
     $("iSpent").textContent = peso(spent);
     $("iSub").textContent = `${periodRange(P)}` + (info.isCurrent ? ` · day ${info.elapsed} of ${info.total}` : "");
 
+    // Short cards: a label, one big number, and a line or two. No long sentences.
     const facts = $("iFacts"); facts.textContent = "";
-    const groups = {};
-    const fact = (tag, parts, tone) => {
-      let g = groups[tag];
-      if (!g){ g = groups[tag] = el("li", "fact"); g.append(el("span", "tag", tag)); facts.append(g); }
-      if (tone === "bad" || (tone === "good" && !g.classList.contains("bad"))){ g.classList.remove("good"); g.classList.add(tone); }
-      g.append(textWith(parts));
+    const card = (tag, value, sub, tone, rows) => {
+      const li = el("li", "fact" + (tone ? " " + tone : ""));
+      li.append(el("span", "tag", tag));
+      if (value) li.append(el("span", "fv", value));
+      (rows || []).forEach(r => { const row = el("div", "frow" + (r.tone ? " " + r.tone : "")); row.append(el("span", null, r.label), el("b", null, r.val)); li.append(row); });
+      if (sub) li.append(el("span", "fs", sub));
+      facts.append(li);
     };
-    const mName = info.isCurrent ? "this month" : `in ${new Date(info.start).toLocaleDateString("en-PH", { month: "long", timeZone: "UTC" })}`;
-    const mPoss = info.isCurrent ? "this month's" : `${new Date(info.start).toLocaleDateString("en-PH", { month: "long", timeZone: "UTC" })}'s`;
+    const signed = n => (n > 0 ? "+" : n < 0 ? "−" : "") + peso(Math.abs(n));
 
-    if (!info.elapsed){ fact("Nothing yet", ["This month hasn't started yet."]); }
-    else if (!exp.length){ fact("Nothing yet", ["No expenses recorded for this month yet."]); }
+    if (!info.elapsed) card("This month", "Not started yet");
+    else if (!exp.length) card("This month", "No expenses yet");
     else {
       const cats = Object.entries(byCat(exp)).sort((a, b) => b[1] - a[1]);
-      // 1. Biggest expense
-      const [topC, topV] = cats[0];
-      fact("Biggest expense", [`Your biggest expense ${mName} ${info.isCurrent ? "is" : "was"} `, { b: topC }, " at ", { b: peso(topV) }, `, ${pct(topV, spent)}% of everything you spent.`]);
-
-      // 2. Fixed vs flexible, and the daily pace of flexible spending
       const fset = fixedSet();
       const fixedTx = exp.filter(t => fset.has(t.cat)), flexTx = exp.filter(t => !fset.has(t.cat));
       const fixedAmt = sumOf(fixedTx), flexAmt = sumOf(flexTx);
+
+      // Biggest expense
+      card("Biggest expense", cats[0][0], `${peso(cats[0][1])} · ${pct(cats[0][1], spent)}% of spending`);
+
+      // Per day (flexible only, so one-time bills don't inflate it)
       const flexAvg = Math.round(flexAmt / info.elapsed);
-      if (info.isCurrent){
-        const proj = Math.round(fixedAmt + flexAvg * info.total);
-        fact("Daily average", ["Your flexible spending averages ", { b: peso(flexAvg) }, " a day. At this pace you'll spend about ", { b: peso(proj) }, ` by ${fmtDay(info.end)}`, fixedAmt ? ", counting fixed costs paid so far." : "."]);
-      } else fact("Daily average", ["Flexible spending averaged ", { b: peso(flexAvg) }, ` a day across ${info.total} days.`]);
-      if (fixedAmt && flexAmt){
-        const flexTop = Object.entries(byCat(flexTx)).sort((a, b) => b[1] - a[1])[0];
-        fact("Fixed vs flexible", [{ b: peso(fixedAmt) }, ` (${pct(fixedAmt, spent)}%) went to fixed costs. The other `, { b: peso(flexAmt) }, ` (${pct(flexAmt, spent)}%) is flexible, which is where cutting back makes a difference. Most of it went to `, { b: flexTop[0] }, ` (${peso(flexTop[1])}).`]);
-      } else if (!fixedAmt && fset.size){
-        fact("Fixed vs flexible", ["No fixed costs recorded yet ", mName, ", so everything so far is flexible spending."]);
+      if (info.isCurrent) card("Per day", `${peso(flexAvg)} / day`, `Expected total by ${fmtDay(info.end)}: ${peso(Math.round(fixedAmt + flexAvg * info.total))}`);
+      else card("Per day", `${peso(flexAvg)} / day`, `Average over ${info.total} days`);
+
+      // Saved
+      if (income > 0){
+        const kept = Math.round(income - spent);
+        if (kept >= 0) card("Saved", `${pct(kept, income)}%`, `${peso(kept)} left from income`, "good");
+        else card("Saved", signed(kept), "Spent more than income", "bad");
+      } else card("Saved", "No income yet", "Add your income to see this");
+
+      // Fixed vs flexible
+      if (fixedAmt || flexAmt){
+        const flexTop = flexTx.length ? Object.entries(byCat(flexTx)).sort((a, b) => b[1] - a[1])[0][0] : "";
+        card("Fixed vs flexible", "", flexTop ? `Biggest flexible: ${flexTop}` : "",
+          null, [{ label: "Fixed", val: `${peso(fixedAmt)} · ${pct(fixedAmt, spent)}%` }, { label: "Flexible", val: `${peso(flexAmt)} · ${pct(flexAmt, spent)}%` }]);
       }
 
-      // 3. Savings
-      if (income > 0){
-        const kept = Math.round((income - spent) * 100) / 100;
-        if (kept >= 0) fact("Savings", [info.isCurrent ? "You've kept " : "You saved ", { b: `${pct(kept, income)}%` }, ` of ${mPoss} income`, info.isCurrent ? " so far (" : " (", { b: peso(kept) }, ")."], "good");
-        else fact("Savings", ["You've spent ", { b: peso(-kept) }, ` more than the income recorded ${mName}.`], "bad");
-      } else fact("Savings", [`No income recorded ${mName}, so savings can't be worked out yet.`]);
-
-      // 4. Budget watch
+      // Budgets
       const bc = Object.keys(data.budgets).filter(k => !k.startsWith("__") && data.budgets[k] > 0);
       if (bc.length){
         const sp = byCat(exp), warn = [];
@@ -978,56 +981,43 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
           if (s2 > b) warn.push({ c, over: s2 - b, now: true });
           else if (info.isCurrent && info.elapsed >= 3 && s2 > 0 && !fset.has(c)){ const pr = s2 / info.elapsed * info.total; if (pr > b * 1.05) warn.push({ c, over: pr - b, now: false }); }
         });
-        warn.sort((a, b) => b.over - a.over).slice(0, 3).forEach(w => {
-          if (w.now) fact("Budget watch", [{ b: w.c }, info.isCurrent ? " is already " : " went ", { b: peso(Math.round(w.over)) }, " over budget."], "bad");
-          else fact("Budget watch", [{ b: w.c }, " is on pace to go over its budget by about ", { b: peso(Math.round(w.over / 10) * 10) }, ". Slowing down now keeps it on track."], "bad");
-        });
-        if (!warn.length) fact("Budget watch", [info.isCurrent ? "All budgets are on track at the current pace." : "Every category stayed within budget."], "good");
+        if (!warn.length) card("Budgets", "All on track", "", "good");
+        else card("Budgets", "", warn.some(w => !w.now) ? "“May go over” is based on your spending so far" : "", "bad",
+          warn.sort((a, b) => b.over - a.over).slice(0, 3).map(w => ({ label: w.c, val: (w.now ? "Over " : "May go over ") + peso(w.now ? Math.round(w.over) : Math.round(w.over / 10) * 10), tone: "bad" })));
       }
 
-      // 5. Compared with the same point last month
+      // Vs last month (same day of last month's cycle)
       const Q = shiftMonth(P, -1), qi = periodInfo(Q);
       const qExpAll = live().filter(t => t.type === "expense" && inPeriod(t.date, Q));
-      if (qExpAll.length < 5){
-        fact("Vs last month", ["Comparisons with last month will show once you have a full month of records."]);
-      } else {
+      if (qExpAll.length < 5) card("Vs last month", "Not yet", "Needs a full month of records");
+      else {
         const cutoff = qi.start + (info.elapsed - 1) * DAY;
-        const qExp = qExpAll.filter(t => ymdUTC(t.date) <= cutoff), qSpent = sumOf(qExp);
-        const when = info.isCurrent ? "at this point last month" : "last month";
-        const diff = Math.round(spent - qSpent);
-        if (Math.abs(diff) < 100) fact("Vs last month", ["Overall spending is about the same as ", when, "."]);
-        else fact("Vs last month", ["Overall you've spent ", { b: peso(Math.abs(diff)) }, diff > 0 ? " more" : " less", ` than ${when}`, qSpent ? ` (${diff > 0 ? "+" : "−"}${Math.abs(pct(diff, qSpent))}%).` : "."], diff > 0 ? "bad" : "good");
+        const qExp = qExpAll.filter(t => ymdUTC(t.date) <= cutoff), qSpent = sumOf(qExp), diff = Math.round(spent - qSpent);
         const cur = byCat(exp), prv = byCat(qExp);
-        [...new Set([...Object.keys(cur), ...Object.keys(prv)])]
-          .map(c => ({ c, a: cur[c] || 0, b: prv[c] || 0, d: (cur[c] || 0) - (prv[c] || 0) }))
+        const rows = [...new Set([...Object.keys(cur), ...Object.keys(prv)])]
+          .map(c => ({ c, a: cur[c] || 0, b: prv[c] || 0, d: Math.round((cur[c] || 0) - (prv[c] || 0)) }))
           .filter(x => Math.max(x.a, x.b) >= 1000 && Math.abs(x.d) >= 500)
-          .sort((x, y) => Math.abs(y.d) - Math.abs(x.d)).slice(0, 2)
-          .forEach(x => {
-            const parts = [{ b: x.c }, ": ", { b: peso(Math.abs(Math.round(x.d))) }, x.d > 0 ? " more" : " less", ` than ${when}`];
-            if (x.b >= 1000) parts.push(` (${x.d > 0 ? "+" : "−"}${Math.abs(pct(x.d, x.b))}%)`);
-            parts.push(x.b ? "." : ", when there was nothing.");
-            fact("Vs last month", parts, x.d > 0 ? "bad" : "good");
-          });
+          .sort((x, y) => Math.abs(y.d) - Math.abs(x.d)).slice(0, 3)
+          .map(x => ({ label: x.c, val: signed(x.d), tone: x.d > 0 ? "bad" : "good" }));
+        card("Vs last month", Math.abs(diff) < 100 ? "About the same" : `${signed(diff)}${qSpent ? ` (${diff > 0 ? "+" : "−"}${Math.abs(pct(diff, qSpent))}%)` : ""}`,
+          info.isCurrent ? "Compared with the same day last month" : "Compared with last month", Math.abs(diff) < 100 ? null : (diff > 0 ? "bad" : "good"), rows);
       }
 
-      // 6. Bills still due before this month ends
+      // Bills still due before this month ends
       if (info.isCurrent){
-        const endStr = new Date(info.end).toISOString().slice(0, 10), todayStr = today();
+        const endStr = new Date(info.end).toISOString().slice(0, 10);
         const due = [
           ...billsList().map(b => ({ id: b.id, name: b.name, amt: b.amount || 0, due: b.due, since: b.since })),
           ...cardsList().filter(c => Number.isInteger(c.due)).map(c => ({ id: c.id, name: c.name, amt: cardOwed(c.id), due: c.due, since: c.since }))
-        ].map(x => Object.assign(x, nextDue(x))).filter(x => x.date <= endStr && x.date >= shiftMonth(todayStr.slice(0, 7), -1) + "-01");
-        if (due.length){
-          const tot = due.reduce((a, x) => a + x.amt, 0);
-          fact("Bills coming up", [`Still to pay before ${fmtDay(info.end)}: `, { b: due.map(x => x.name).join(", ") }, tot ? `, about ${peso(tot)} in total.` : "."]);
-        }
+        ].map(x => Object.assign(x, nextDue(x))).filter(x => x.date <= endStr && x.date >= shiftMonth(today().slice(0, 7), -1) + "-01");
+        if (due.length) card(`Bills before ${fmtDay(info.end)}`, peso(due.reduce((a, x) => a + x.amt, 0)), "", null, due.map(x => ({ label: x.name, val: x.amt ? peso(x.amt) : "—" })));
       }
 
-      // 7. Credit cards
+      // Credit cards
       const onCards = sumOf(exp.filter(isCardPay));
       if (onCards > 0){
         const unpaid = cardsList().reduce((a, c) => a + cardOwed(c.id), 0);
-        fact("Credit cards", [{ b: peso(onCards) }, ` (${pct(onCards, spent)}%) of ${mPoss} spending went on credit cards.`, unpaid ? " Still unpaid across your cards: " : " Every card is paid up.", unpaid ? { b: peso(unpaid) } : "", unpaid ? "." : ""]);
+        card("Credit cards", "", "", null, [{ label: "Used this month", val: peso(onCards) }, { label: "Unpaid", val: peso(unpaid), tone: unpaid ? "bad" : "good" }]);
       }
     }
 
