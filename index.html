@@ -24,12 +24,14 @@
   --accent:#0E7A5C; --accent-ink:#FFFFFF; --soft:#DCEDE5; --warn:#B7791F; --bad:#C2412D;
   --display:"Bricolage Grotesque", "Figtree", system-ui, sans-serif;
   --body:"Figtree", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --c1:#2a78d6; --c2:#eb6834; --c3:#1baf7a; --c4:#eda100; --c5:#e87ba4; --c6:#008300; --c7:#6250d6; --c-other:#A3AEA9;
   color-scheme:light;
   padding-top:env(safe-area-inset-top,0px);
 }
 @media (prefers-color-scheme: dark){:root{
   --bg:#0F1714; --surface:#17221E; --ink:#E6EEEA; --muted:#93A59D; --line:#2A3833;
-  --accent:#3FBF94; --accent-ink:#0B1310; --soft:#1D3229; --warn:#E3A84A; --bad:#F07560; color-scheme:dark}}
+  --accent:#3FBF94; --accent-ink:#0B1310; --soft:#1D3229; --warn:#E3A84A; --bad:#F07560; color-scheme:dark;
+  --c1:#3987e5; --c2:#d95926; --c3:#199e70; --c4:#c98500; --c5:#d55181; --c6:#008300; --c7:#9085e9; --c-other:#56635E}}
 
 *{box-sizing:border-box}
 [hidden]{display:none!important}
@@ -202,6 +204,36 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
 .invite code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.82rem;overflow-wrap:anywhere;user-select:all;color:var(--ink)}
 .sep{border:0;border-top:1px solid var(--line);margin:4px 0}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(90px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:12px;font-weight:600;z-index:20;font-size:.9rem;max-width:calc(100% - 32px);text-align:center}
+.view{display:flex;flex-direction:column;gap:22px}
+.tabs{display:grid;grid-template-columns:1fr 1fr;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:4px;gap:4px;margin-top:-8px}
+.tabs button{border:0;background:none;padding:10px;border-radius:10px;font-weight:700;color:var(--muted)}
+.tabs button[aria-selected="true"]{background:var(--accent);color:var(--accent-ink)}
+.ihero{display:flex;flex-direction:column;gap:4px}
+.ihero .sub{color:var(--muted);font-size:.88rem}
+.facts{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.fact{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px 14px;display:flex;flex-direction:column;gap:4px}
+.fact .tag{font-size:.7rem;text-transform:uppercase;letter-spacing:.09em;font-weight:700;color:var(--muted)}
+.fact.bad .tag{color:var(--bad)} .fact.good .tag{color:var(--accent)}
+.fact p{margin:0;font-size:.95rem;line-height:1.45}
+.fact p b{font-weight:700}
+.fact p + p{padding-top:6px;border-top:1px solid var(--line);margin-top:2px}
+.chartcard{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:14px}
+.donutwrap{display:flex;justify-content:center}
+.donutwrap svg{width:200px;max-width:100%;height:auto}
+.donutwrap text{fill:var(--ink);font-family:var(--display)}
+.donutwrap .dsub{fill:var(--muted);font-family:var(--body)}
+.legend{display:flex;flex-direction:column;gap:2px}
+.lrow{display:grid;grid-template-columns:12px minmax(0,1fr) auto 44px;gap:10px;align-items:center;padding:7px 0;border-top:1px solid var(--line);font-size:.92rem}
+.lrow:first-child{border-top:0}
+.lrow i{width:12px;height:12px;border-radius:3px;display:block}
+.lrow .ln{min-width:0;overflow-wrap:anywhere;font-weight:600}
+.lrow .la{font-weight:700}
+.lrow .lp{color:var(--muted);text-align:right;font-size:.85rem}
+.trend svg{width:100%;height:auto;display:block}
+.trend .tl{fill:var(--muted);font-size:11px;font-family:var(--body)}
+.trend .tv{fill:var(--ink);font-size:11px;font-weight:700;font-family:var(--body)}
+.trend .grid{stroke:var(--line);stroke-width:1}
+.trend rect{fill:var(--c1)} .trend rect.part{fill:var(--c1);opacity:.45}
 @media (prefers-reduced-motion:no-preference){.sheet{animation:up .22s ease-out}@keyframes up{from{transform:translateY(30px);opacity:.6}}}
 </style>
 </head>
@@ -216,7 +248,12 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
     </div>
   </header>
   <button class="status" id="status" type="button"><i></i><span id="statusText">Not connected</span></button>
+  <div class="tabs" role="tablist" aria-label="View">
+    <button type="button" role="tab" id="tabBudget" aria-selected="true" aria-controls="budgetView">Budget</button>
+    <button type="button" role="tab" id="tabInsights" aria-selected="false" aria-controls="insightsView">Insights</button>
+  </div>
 
+  <div class="view" id="budgetView" role="tabpanel" aria-labelledby="tabBudget">
   <section class="balance">
     <span class="label">Left this month</span>
     <p class="big" id="left">₱0</p>
@@ -247,6 +284,27 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
     <div class="sec-h"><h2>Transactions</h2><span class="label" id="count"></span></div>
     <div id="ledger"></div>
   </section>
+  </div>
+
+  <div class="view" id="insightsView" role="tabpanel" aria-labelledby="tabInsights" hidden>
+    <section class="ihero">
+      <span class="label">Spent this month</span>
+      <p class="big" id="iSpent">₱0</p>
+      <span class="sub" id="iSub"></span>
+    </section>
+    <section>
+      <div class="sec-h"><h2>What this means</h2></div>
+      <ul class="facts" id="iFacts"></ul>
+    </section>
+    <section id="iWhereSec">
+      <div class="sec-h"><h2>Where it went</h2></div>
+      <div class="chartcard"><div class="donutwrap" id="iDonut"></div><div class="legend" id="iLegend"></div></div>
+    </section>
+    <section>
+      <div class="sec-h"><h2>Last 6 months</h2><span class="label">Total spent</span></div>
+      <div class="chartcard trend" id="iTrend"></div>
+    </section>
+  </div>
 </div>
 
 <button class="fab" id="addBtn"><span>+</span> Add</button>
@@ -715,8 +773,160 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
         wrap.append(el("h3", null, dayName(d)), box); lg.append(wrap);
       });
     }
+    renderInsights();
     drawStatus();
   }
+
+  /* ---------- Insights ---------- */
+  const DAY = 864e5;
+  const ymdUTC = d => { const [y, m, dd] = d.split("-").map(Number); return Date.UTC(y, m - 1, dd); };
+  const fmtDay = ms => new Date(ms).toLocaleDateString("en-PH", { month: "short", day: "numeric", timeZone: "UTC" });
+  const pct = (a, b) => b ? Math.round(a / b * 100) : 0;
+  function periodInfo(ym){
+    const start = ymdUTC(periodStart(ym)), end = ymdUTC(periodStart(shiftMonth(ym, 1))) - DAY;
+    const total = Math.round((end - start) / DAY) + 1, cur = curPeriod();
+    const elapsed = ym === cur ? Math.round((ymdUTC(today()) - start) / DAY) + 1 : (ym < cur ? total : 0);
+    return { start, end, total, elapsed, isCurrent: ym === cur };
+  }
+  function byCat(txs){ const o = {}; txs.forEach(t => o[t.cat] = (o[t.cat] || 0) + t.amount); return o; }
+  const sumOf = txs => Math.round(txs.reduce((a, t) => a + t.amount, 0) * 100) / 100;
+  function textWith(parts){ const p = el("p"); parts.forEach(x => p.append(typeof x === "string" ? x : el("b", null, x.b))); return p; }
+
+  function renderInsights(){
+    if (view.tab !== "insights") return;
+    const P = view.month, info = periodInfo(P);
+    const all = live().filter(t => inPeriod(t.date, P));
+    const exp = all.filter(t => t.type === "expense"), inc = all.filter(t => t.type === "income");
+    const spent = sumOf(exp), income = sumOf(inc);
+    $("iSpent").textContent = peso(spent);
+    $("iSub").textContent = `${periodRange(P)}` + (info.isCurrent ? ` · day ${info.elapsed} of ${info.total}` : "");
+
+    const facts = $("iFacts"); facts.textContent = "";
+    const groups = {};
+    const fact = (tag, parts, tone) => {
+      let g = groups[tag];
+      if (!g){ g = groups[tag] = el("li", "fact"); g.append(el("span", "tag", tag)); facts.append(g); }
+      if (tone === "bad" || (tone === "good" && !g.classList.contains("bad"))){ g.classList.remove("good"); g.classList.add(tone); }
+      g.append(textWith(parts));
+    };
+    const mName = info.isCurrent ? "this month" : `in ${new Date(info.start).toLocaleDateString("en-PH", { month: "long", timeZone: "UTC" })}`;
+    const mPoss = info.isCurrent ? "this month's" : `${new Date(info.start).toLocaleDateString("en-PH", { month: "long", timeZone: "UTC" })}'s`;
+
+    if (!info.elapsed){ fact("Nothing yet", ["This month hasn't started yet."]); }
+    else if (!exp.length){ fact("Nothing yet", ["No expenses recorded for this month yet."]); }
+    else {
+      const cats = Object.entries(byCat(exp)).sort((a, b) => b[1] - a[1]);
+      // 1. Biggest expense
+      const [topC, topV] = cats[0];
+      fact("Biggest expense", [`Your biggest expense ${mName} ${info.isCurrent ? "is" : "was"} `, { b: topC }, " at ", { b: peso(topV) }, `, ${pct(topV, spent)}% of everything you spent.`]);
+
+      // 2. Daily average and pace
+      const avg = Math.round(spent / info.elapsed);
+      if (info.isCurrent){
+        const proj = Math.round(avg * info.total);
+        fact("Daily average", ["You spend about ", { b: peso(avg) }, " a day. At this pace you'll spend about ", { b: peso(proj) }, ` by ${fmtDay(info.end)}.`]);
+      } else fact("Daily average", ["You spent about ", { b: peso(avg) }, ` a day across ${info.total} days.`]);
+
+      // 3. Savings
+      if (income > 0){
+        const kept = Math.round((income - spent) * 100) / 100;
+        if (kept >= 0) fact("Savings", [info.isCurrent ? "You've kept " : "You saved ", { b: `${pct(kept, income)}%` }, ` of ${mPoss} income`, info.isCurrent ? " so far (" : " (", { b: peso(kept) }, ")."], "good");
+        else fact("Savings", ["You've spent ", { b: peso(-kept) }, ` more than the income recorded ${mName}.`], "bad");
+      } else fact("Savings", [`No income recorded ${mName}, so savings can't be worked out yet.`]);
+
+      // 4. Budget watch
+      const bc = Object.keys(data.budgets).filter(k => !k.startsWith("__") && data.budgets[k] > 0);
+      if (bc.length){
+        const sp = byCat(exp), warn = [];
+        bc.forEach(c => {
+          const b = data.budgets[c], s2 = sp[c] || 0;
+          if (s2 > b) warn.push({ c, over: s2 - b, now: true });
+          else if (info.isCurrent && info.elapsed >= 3 && s2 > 0){ const pr = s2 / info.elapsed * info.total; if (pr > b * 1.05) warn.push({ c, over: pr - b, now: false }); }
+        });
+        warn.sort((a, b) => b.over - a.over).slice(0, 3).forEach(w => {
+          if (w.now) fact("Budget watch", [{ b: w.c }, info.isCurrent ? " is already " : " went ", { b: peso(Math.round(w.over)) }, " over budget."], "bad");
+          else fact("Budget watch", [{ b: w.c }, " is on pace to go over its budget by about ", { b: peso(Math.round(w.over / 10) * 10) }, ". Slowing down now keeps it on track."], "bad");
+        });
+        if (!warn.length) fact("Budget watch", [info.isCurrent ? "All budgets are on track at the current pace." : "Every category stayed within budget."], "good");
+      }
+
+      // 5. Compared with the same point last month
+      const Q = shiftMonth(P, -1), qi = periodInfo(Q);
+      const qExpAll = live().filter(t => t.type === "expense" && inPeriod(t.date, Q));
+      if (qExpAll.length < 5){
+        fact("Vs last month", ["Comparisons with last month will show once you have a full month of records."]);
+      } else {
+        const cutoff = qi.start + (info.elapsed - 1) * DAY;
+        const qExp = qExpAll.filter(t => ymdUTC(t.date) <= cutoff), qSpent = sumOf(qExp);
+        const when = info.isCurrent ? "at this point last month" : "last month";
+        const diff = Math.round(spent - qSpent);
+        if (Math.abs(diff) < 100) fact("Vs last month", ["Overall spending is about the same as ", when, "."]);
+        else fact("Vs last month", ["Overall you've spent ", { b: peso(Math.abs(diff)) }, diff > 0 ? " more" : " less", ` than ${when}`, qSpent ? ` (${diff > 0 ? "+" : "−"}${Math.abs(pct(diff, qSpent))}%).` : "."], diff > 0 ? "bad" : "good");
+        const cur = byCat(exp), prv = byCat(qExp);
+        [...new Set([...Object.keys(cur), ...Object.keys(prv)])]
+          .map(c => ({ c, a: cur[c] || 0, b: prv[c] || 0, d: (cur[c] || 0) - (prv[c] || 0) }))
+          .filter(x => Math.max(x.a, x.b) >= 1000 && Math.abs(x.d) >= 500)
+          .sort((x, y) => Math.abs(y.d) - Math.abs(x.d)).slice(0, 2)
+          .forEach(x => {
+            const parts = [{ b: x.c }, ": ", { b: peso(Math.abs(Math.round(x.d))) }, x.d > 0 ? " more" : " less", ` than ${when}`];
+            if (x.b >= 1000) parts.push(` (${x.d > 0 ? "+" : "−"}${Math.abs(pct(x.d, x.b))}%)`);
+            parts.push(x.b ? "." : ", when there was nothing.");
+            fact("Vs last month", parts, x.d > 0 ? "bad" : "good");
+          });
+      }
+
+      // 6. Credit cards
+      const onCards = sumOf(exp.filter(isCardPay));
+      if (onCards > 0) fact("Credit cards", [{ b: peso(onCards) }, ` (${pct(onCards, spent)}%) of ${mPoss} spending went on credit cards. That's what to set aside for the bills.`]);
+    }
+
+    // Where it went: donut + legend (top 7 categories, the rest folded into Other)
+    const sec = $("iWhereSec"); sec.hidden = !exp.length;
+    if (exp.length){
+      const cats = Object.entries(byCat(exp)).sort((a, b) => b[1] - a[1]);
+      const rows = cats.slice(0, 7).map(([c, v], i) => ({ c, v, col: `var(--c${i + 1})` }));
+      const rest = cats.slice(7).reduce((a, x) => a + x[1], 0);
+      if (rest > 0) rows.push({ c: "Other", v: rest, col: "var(--c-other)" });
+      const R = 80, W = 26, C = 2 * Math.PI * R, gap = rows.length > 1 ? 2 : 0;
+      let off = 0, segs = "";
+      rows.forEach(r => {
+        const len = r.v / spent * C, dash = Math.max(len - gap, 0.5);
+        segs += `<circle cx="100" cy="100" r="${R}" fill="none" stroke="${r.col}" stroke-width="${W}" stroke-dasharray="${dash} ${C - dash}" stroke-dashoffset="${-off}" transform="rotate(-90 100 100)"><title>${r.c.replace(/[<&]/g, "")}: ${peso(r.v)} (${pct(r.v, spent)}%)</title></circle>`;
+        off += len;
+      });
+      $("iDonut").innerHTML = `<svg viewBox="0 0 200 200" role="img" aria-label="Spending by category">${segs}<text x="100" y="98" text-anchor="middle" font-size="22" font-weight="800">${pct(rows[0].v, spent)}%</text><text class="dsub" x="100" y="120" text-anchor="middle" font-size="11"></text></svg>`;
+      $("iDonut").querySelector(".dsub").textContent = rows[0].c.length > 18 ? rows[0].c.slice(0, 17) + "…" : rows[0].c;
+      const lg = $("iLegend"); lg.textContent = "";
+      rows.forEach(r => { const row = el("div", "lrow"), sw = el("i"); sw.style.background = r.col; row.append(sw, el("span", "ln", r.c), el("span", "la", peso(r.v)), el("span", "lp", pct(r.v, spent) + "%")); lg.append(row); });
+    }
+
+    // Last 6 months trend (current month shown lighter, marked "so far")
+    const months = []; for (let i = 5; i >= 0; i--) months.push(shiftMonth(P, -i));
+    const vals = months.map(m => sumOf(live().filter(t => t.type === "expense" && inPeriod(t.date, m))));
+    const max = Math.max(...vals, 1), Wd = 320, H = 150, top = 22, base = H - 22, bw = 30, step = Wd / 6;
+    let svg = `<svg viewBox="0 0 ${Wd} ${H}" role="img" aria-label="Total spent in the last 6 months"><line class="grid" x1="0" x2="${Wd}" y1="${base}" y2="${base}"/>`;
+    months.forEach((m, i) => {
+      const h = vals[i] ? Math.max(3, (vals[i] / max) * (base - top)) : 0, x = i * step + (step - bw) / 2, partial = m === curPeriod();
+      const [yy, mm] = m.split("-").map(Number), lab = new Date(yy, mm - 1, 1).toLocaleDateString("en-PH", { month: "short" });
+      if (h) svg += `<rect class="${partial ? "part" : ""}" x="${x}" y="${base - h}" width="${bw}" height="${h}" rx="4"><title>${lab}: ${peso(vals[i])}${partial ? " so far" : ""}</title></rect>`;
+      const short = vals[i] >= 1000 ? "₱" + (vals[i] / 1000).toFixed(vals[i] >= 10000 ? 0 : 1) + "k" : (vals[i] ? peso(vals[i]) : "");
+      if (short) svg += `<text class="tv" x="${x + bw / 2}" y="${base - h - 6}" text-anchor="middle">${short}</text>`;
+      svg += `<text class="tl" x="${x + bw / 2}" y="${H - 6}" text-anchor="middle">${lab}${partial ? "*" : ""}</text>`;
+    });
+    svg += `</svg>`;
+    $("iTrend").innerHTML = svg + `<span class="label" style="text-transform:none;letter-spacing:0;font-weight:500">* this month so far. Each month runs from the 15th to the 14th.</span>`;
+  }
+
+  function setTab(t){
+    view.tab = t === "insights" ? "insights" : "budget";
+    $("budgetView").hidden = view.tab !== "budget"; $("insightsView").hidden = view.tab !== "insights";
+    $("tabBudget").setAttribute("aria-selected", String(view.tab === "budget"));
+    $("tabInsights").setAttribute("aria-selected", String(view.tab === "insights"));
+    try { localStorage.setItem("pitaka-tab", view.tab); } catch(e){}
+    renderInsights();
+  }
+  $("tabBudget").onclick = () => setTab("budget");
+  $("tabInsights").onclick = () => setTab("insights");
 
   /* ---------- Month nav ---------- */
   function shift(n){ const [y,m] = view.month.split("-").map(Number); const d = new Date(y, m-1+n, 1); view.month = `${d.getFullYear()}-${pad(d.getMonth()+1)}`; view.openTx = null; view.openBudget = null; render(); }
@@ -1114,7 +1324,8 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
   let tt; function toast(msg){ const t = $("toast"); t.textContent = msg; t.hidden = false; clearTimeout(tt); tt = setTimeout(() => t.hidden = true, 2400); }
 
   /* ---------- Boot ---------- */
-  load(); render();
+  load(); try { view.tab = localStorage.getItem("pitaka-tab") === "insights" ? "insights" : "budget"; } catch(e){ view.tab = "budget"; }
+  render(); setTab(view.tab);
   const m = location.hash.match(/^#join=([^&]+)/);
   if (m) {
     const k = decodeURIComponent(m[1]);
