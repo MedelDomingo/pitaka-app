@@ -177,6 +177,31 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
 .bsum .sv strong{color:var(--accent)} .bsum .ov strong{color:var(--bad)}
 .bsum .zero strong{color:var(--muted)}
 .daily{display:flex;flex-direction:column;gap:10px}
+.bills{background:var(--surface);border:1px solid var(--line);border-radius:16px;overflow:hidden}
+.bill{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 12px;align-items:center;padding:12px 14px;border-top:1px solid var(--line)}
+.bill:first-child{border-top:0}
+.bill .bn{font-weight:700;min-width:0;overflow-wrap:anywhere}
+.bill .bs{grid-column:1;font-size:.82rem;color:var(--muted)}
+.bill .bs.over{color:var(--bad);font-weight:700}
+.bill .bs.soon{color:var(--warn);font-weight:700}
+.bill .bs.done{color:var(--accent);font-weight:600}
+.bill .ba{grid-row:1/3;grid-column:2;display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+.bill .ba b{font-weight:700}
+.bill .ba button{border:0;background:var(--accent);color:var(--accent-ink);font-weight:700;border-radius:10px;padding:7px 12px;font-size:.85rem}
+.bills .more{padding:10px 14px;font-size:.84rem;color:var(--muted);border-top:1px solid var(--line)}
+.cardpay{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 14px;border-top:1px solid var(--line);background:var(--bg)}
+.cardpay span{font-size:.88rem;color:var(--muted)} .cardpay span b{color:var(--ink)}
+.cardpay button{border:0;background:var(--accent);color:var(--accent-ink);font-weight:700;border-radius:10px;padding:8px 12px;font-size:.85rem}
+.billedit{display:grid;grid-template-columns:minmax(0,1fr) 40px;gap:8px;padding:12px;border:1px solid var(--line);border-radius:14px;background:var(--bg)}
+.billedit input,.billedit select,.cardedit .due{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:10px;padding:10px;font:inherit;font-size:16px;width:100%;min-width:0}
+.billedit .two{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.billedit .full,.cardedit .duerow{grid-column:1/-1}
+.cardedit .duerow{display:grid;grid-template-columns:minmax(0,1fr) 96px;gap:8px;align-items:center;font-size:.88rem;color:var(--muted)}
+.bname{display:flex;flex-direction:column;align-items:flex-start;gap:4px;min-width:0}
+.bname label{font-weight:600;overflow-wrap:anywhere}
+.kind{border:1px solid var(--line);background:var(--surface);border-radius:99px;padding:3px 10px;font-size:.75rem;font-weight:700;color:var(--muted)}
+.kind[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--bg)}
+.lrow .fx{color:var(--muted);font-weight:500;font-size:.8rem}
 .dcard{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:10px}
 .dcard .dh{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
 .dcard .dn{font-weight:700;min-width:0;overflow-wrap:anywhere}
@@ -264,6 +289,11 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
   </section>
 
 
+  <section id="billsSec">
+    <div class="sec-h"><h2>Bills due</h2><button class="link" id="manageBills">Manage bills</button></div>
+    <div id="billsBox"></div>
+  </section>
+
   <section id="dailySec" hidden>
     <div class="sec-h"><h2>Daily allowance</h2><span class="label" id="dailyNote"></span></div>
     <div class="daily" id="daily"></div>
@@ -342,7 +372,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
   <form class="sheet-in" id="budgetForm" novalidate>
     <div class="grab"></div>
     <h2 id="bTitle">Categories &amp; budgets</h2>
-    <p class="muted">Set a monthly limit, or leave it blank to just track spending. Removing a category keeps its past entries.</p>
+    <p class="muted">Set a monthly limit, or leave it blank to just track spending. Mark costs that stay about the same each month, like bills, as Fixed. Removing a category keeps its past entries.</p>
     <h3 class="sub">Expenses</h3>
     <div class="bset" id="bset"></div>
     <div class="addcat"><input id="newExp" maxlength="30" placeholder="Add expense category, e.g. Baby" autocomplete="off"><button type="button" id="newExpBtn">Add</button></div>
@@ -351,6 +381,30 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
     <div class="addcat"><input id="newInc" maxlength="30" placeholder="Add income category, e.g. Rental" autocomplete="off"><button type="button" id="newIncBtn">Add</button></div>
     <p class="err" id="catErr" hidden></p>
     <button class="primary" type="submit">Save</button>
+  </form>
+</div>
+
+<div class="sheet" id="billSheet" hidden role="dialog" aria-modal="true" aria-labelledby="blTitle">
+  <form class="sheet-in" id="billForm" novalidate>
+    <div class="grab"></div>
+    <h2 id="blTitle">Bills</h2>
+    <p class="muted">Monthly bills like Meralco or PLDT. The app reminds you a week before each due date. For credit card due dates, use Manage cards.</p>
+    <div class="cardset" id="billset"></div>
+    <button class="secondary" type="button" id="addBillRow">+ Add bill</button>
+    <p class="err" id="billErr" hidden></p>
+    <button class="primary" type="submit">Save</button>
+  </form>
+</div>
+
+<div class="sheet" id="paySheet" hidden role="dialog" aria-modal="true" aria-labelledby="pTitle">
+  <form class="sheet-in" id="payForm" novalidate>
+    <div class="grab"></div>
+    <h2 id="pTitle">Pay card bill</h2>
+    <p class="muted" id="payInfo"></p>
+    <label class="amount" for="payAmt"><span>₱</span><input id="payAmt" inputmode="decimal" autocomplete="off" placeholder="0"></label>
+    <p class="muted">This marks the bill as paid and lowers what you owe on the card. It doesn't count as spending again, since each swipe was already recorded.</p>
+    <p class="err" id="payErr" hidden></p>
+    <button class="primary" type="submit">Mark as paid</button>
   </form>
 </div>
 
@@ -429,7 +483,38 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
   const listOk = v => Array.isArray(v) && v.length && v.every(x => typeof x === "string");
   const expCats = () => listOk(data.budgets.__exp) ? data.budgets.__exp : DEF_EXP;
   const incCats = () => listOk(data.budgets.__inc) ? data.budgets.__inc : DEF_INC;
-  const MAX_CARDS = 12;
+  const MAX_CARDS = 12, MAX_BILLS = 20;
+  // ---- Bills & card due dates ----
+  // __bills = [{id, name, amount, due, cat, since}]; cards may carry {due, since}.
+  // __paid = {"2026-11": {itemId: amountPaid}} keyed by the calendar month of the due date.
+  const billsList = () => Array.isArray(data.budgets.__bills) ? data.budgets.__bills.filter(b => b && typeof b.id === "string" && typeof b.name === "string" && Number.isInteger(b.due)) : [];
+  const paidMap = () => { const p = data.budgets.__paid; return p && typeof p === "object" && !Array.isArray(p) ? p : {}; };
+  const paidFor = (ym, id) => { const v = (paidMap()[ym] || {})[id]; return typeof v === "number" ? v : null; };
+  const dueDate = (ym, d) => { const [y, m] = ym.split("-").map(Number); return `${ym}-${pad(Math.min(d, new Date(y, m, 0).getDate()))}`; };
+  // First month whose due date is on or after today, used when a due day is first set.
+  const sinceFor = d => { const cm = today().slice(0, 7); return dueDate(cm, d) >= today() ? cm : shiftMonth(cm, 1); };
+  const daysUntil = d => Math.round((ymdUTC2(d) - ymdUTC2(today())) / 864e5);
+  const ymdUTC2 = d => { const [y, m, dd] = d.split("-").map(Number); return Date.UTC(y, m - 1, dd); };
+  // The due that needs attention now: an unpaid one from last month, else this month's, else next month's.
+  function nextDue(item){
+    const cm = today().slice(0, 7), pm = shiftMonth(cm, -1), since = item.since || cm;
+    if (pm >= since && paidFor(pm, item.id) === null) return { ym: pm, date: dueDate(pm, item.due) };
+    if (cm >= since && paidFor(cm, item.id) === null) return { ym: cm, date: dueDate(cm, item.due) };
+    const nm = shiftMonth(cm, 1); return { ym: nm, date: dueDate(nm, item.due), later: true };
+  }
+  function cardOwed(cardId){
+    const swiped = live().filter(t => t.type === "expense" && t.pay === cardId).reduce((a, t) => a + t.amount, 0);
+    const paid = Object.values(paidMap()).reduce((a, m) => a + (typeof m[cardId] === "number" ? m[cardId] : 0), 0);
+    return Math.max(0, Math.round((swiped - paid) * 100) / 100);
+  }
+  function markPaid(ym, id, amount){
+    const all = Object.assign({}, paidMap()), m = Object.assign({}, all[ym] || {});
+    m[id] = Math.round(((typeof m[id] === "number" ? m[id] : 0) + amount) * 100) / 100; all[ym] = m;
+    commitBudgets(Object.assign({}, data.budgets, { __paid: all }));
+  }
+  // ---- Fixed vs flexible ----
+  const DEFAULT_FIXED = ["Bills", "Load & Internet"];
+  const fixedSet = () => new Set(Array.isArray(data.budgets.__fixed) ? data.budgets.__fixed : DEFAULT_FIXED);
   const cardsList = () => Array.isArray(data.budgets.__cards) ? data.budgets.__cards.filter(c => c && typeof c.id === "string" && typeof c.name === "string") : [];
   const cardById = id => cardsList().find(c => c.id === id);
   const isCardPay = t => t.type === "expense" && t.pay && t.pay !== "cash";
@@ -693,6 +778,39 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
       bx.append(row);
     });
 
+    // Bills due (reminders a week ahead; always about today, not the month being viewed)
+    const bb = $("billsBox"); bb.textContent = "";
+    const dueItems = [
+      ...billsList().map(b => ({ kind: "bill", id: b.id, name: b.name, amount: b.amount || 0, due: b.due, since: b.since, ref: b })),
+      ...cardsList().filter(c => Number.isInteger(c.due)).map(c => ({ kind: "card", id: c.id, name: c.name + " bill", amount: cardOwed(c.id), due: c.due, since: c.since, ref: c }))
+    ].map(x => Object.assign(x, nextDue(x))).map(x => Object.assign(x, { left: daysUntil(x.date) })).sort((a, b) => a.left - b.left);
+    const showNow = dueItems.filter(x => x.left <= 7 && !(x.kind === "card" && x.amount <= 0 && x.left >= 0));
+    if (!dueItems.length){
+      const e = el("div", "empty"); const btn = el("button", "secondary", "Add a bill"); btn.type = "button"; btn.style.marginTop = "12px"; btn.onclick = openBills;
+      e.append(el("strong", null, "No bills yet"), "Add bills like Meralco or PLDT, and card due dates in Manage cards, to get reminded before they're due.", el("br"), btn);
+      bb.append(e);
+    } else {
+      const box = el("div", "bills");
+      const fmtD = d => { const [y, m, dd] = d.split("-").map(Number); return new Date(y, m - 1, dd).toLocaleDateString("en-PH", { month: "short", day: "numeric" }); };
+      showNow.forEach(x => {
+        const row = el("div", "bill"), act = el("div", "ba");
+        let st, cls;
+        if (x.left < 0){ st = `Overdue · was due ${fmtD(x.date)}`; cls = "over"; }
+        else if (x.left === 0){ st = "Due today"; cls = "over"; }
+        else { st = `Due in ${x.left} ${x.left === 1 ? "day" : "days"} · ${fmtD(x.date)}`; cls = "soon"; }
+        if (x.amount) act.append(el("b", null, peso(x.amount)));
+        const go = el("button", null, x.kind === "card" ? "Pay" : "Record"); go.type = "button";
+        go.onclick = () => x.kind === "card" ? openPay(x.ref, x.ym) : recordBill(x.ref, x.ym);
+        act.append(go);
+        row.append(el("span", "bn", x.name), act, el("span", "bs " + cls, st));
+        box.append(row);
+      });
+      const later = dueItems.filter(x => !showNow.includes(x));
+      if (!showNow.length) box.append(el("div", "more", "Nothing due in the next 7 days."));
+      if (later.length){ const n = later[0]; box.append(el("div", "more", `Next: ${n.name} on ${fmtD(n.date)}`)); }
+      bb.append(box);
+    }
+
     // Credit cards
     const cardsEl = $("cards"); cardsEl.textContent = "";
     const cards = cardsList();
@@ -727,6 +845,14 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
             brk.append(r);
           });
           box.append(brk);
+        }
+        const cobj = cardById(g.id);
+        if (cobj){
+          const owed = cardOwed(cobj.id), cp = el("div", "cardpay");
+          const info = el("span"); info.append("Unpaid on this card: ", el("b", null, peso(owed)));
+          const pb = el("button", null, "Pay bill"); pb.type = "button";
+          pb.onclick = e => { e.stopPropagation(); openPay(cobj, Number.isInteger(cobj.due) ? nextDue({ id: cobj.id, due: cobj.due, since: cobj.since }).ym : today().slice(0, 7)); };
+          cp.append(info, pb); box.append(cp);
         }
         const items = el("div", "citems");
         if (!g.items.length) items.append(el("div", "none", "Nothing swiped on this card this month."));
@@ -820,12 +946,21 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
       const [topC, topV] = cats[0];
       fact("Biggest expense", [`Your biggest expense ${mName} ${info.isCurrent ? "is" : "was"} `, { b: topC }, " at ", { b: peso(topV) }, `, ${pct(topV, spent)}% of everything you spent.`]);
 
-      // 2. Daily average and pace
-      const avg = Math.round(spent / info.elapsed);
+      // 2. Fixed vs flexible, and the daily pace of flexible spending
+      const fset = fixedSet();
+      const fixedTx = exp.filter(t => fset.has(t.cat)), flexTx = exp.filter(t => !fset.has(t.cat));
+      const fixedAmt = sumOf(fixedTx), flexAmt = sumOf(flexTx);
+      const flexAvg = Math.round(flexAmt / info.elapsed);
       if (info.isCurrent){
-        const proj = Math.round(avg * info.total);
-        fact("Daily average", ["You spend about ", { b: peso(avg) }, " a day. At this pace you'll spend about ", { b: peso(proj) }, ` by ${fmtDay(info.end)}.`]);
-      } else fact("Daily average", ["You spent about ", { b: peso(avg) }, ` a day across ${info.total} days.`]);
+        const proj = Math.round(fixedAmt + flexAvg * info.total);
+        fact("Daily average", ["Your flexible spending averages ", { b: peso(flexAvg) }, " a day. At this pace you'll spend about ", { b: peso(proj) }, ` by ${fmtDay(info.end)}`, fixedAmt ? ", counting fixed costs paid so far." : "."]);
+      } else fact("Daily average", ["Flexible spending averaged ", { b: peso(flexAvg) }, ` a day across ${info.total} days.`]);
+      if (fixedAmt && flexAmt){
+        const flexTop = Object.entries(byCat(flexTx)).sort((a, b) => b[1] - a[1])[0];
+        fact("Fixed vs flexible", [{ b: peso(fixedAmt) }, ` (${pct(fixedAmt, spent)}%) went to fixed costs. The other `, { b: peso(flexAmt) }, ` (${pct(flexAmt, spent)}%) is flexible, which is where cutting back makes a difference. Most of it went to `, { b: flexTop[0] }, ` (${peso(flexTop[1])}).`]);
+      } else if (!fixedAmt && fset.size){
+        fact("Fixed vs flexible", ["No fixed costs recorded yet ", mName, ", so everything so far is flexible spending."]);
+      }
 
       // 3. Savings
       if (income > 0){
@@ -841,7 +976,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
         bc.forEach(c => {
           const b = data.budgets[c], s2 = sp[c] || 0;
           if (s2 > b) warn.push({ c, over: s2 - b, now: true });
-          else if (info.isCurrent && info.elapsed >= 3 && s2 > 0){ const pr = s2 / info.elapsed * info.total; if (pr > b * 1.05) warn.push({ c, over: pr - b, now: false }); }
+          else if (info.isCurrent && info.elapsed >= 3 && s2 > 0 && !fset.has(c)){ const pr = s2 / info.elapsed * info.total; if (pr > b * 1.05) warn.push({ c, over: pr - b, now: false }); }
         });
         warn.sort((a, b) => b.over - a.over).slice(0, 3).forEach(w => {
           if (w.now) fact("Budget watch", [{ b: w.c }, info.isCurrent ? " is already " : " went ", { b: peso(Math.round(w.over)) }, " over budget."], "bad");
@@ -875,9 +1010,25 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
           });
       }
 
-      // 6. Credit cards
+      // 6. Bills still due before this month ends
+      if (info.isCurrent){
+        const endStr = new Date(info.end).toISOString().slice(0, 10), todayStr = today();
+        const due = [
+          ...billsList().map(b => ({ id: b.id, name: b.name, amt: b.amount || 0, due: b.due, since: b.since })),
+          ...cardsList().filter(c => Number.isInteger(c.due)).map(c => ({ id: c.id, name: c.name, amt: cardOwed(c.id), due: c.due, since: c.since }))
+        ].map(x => Object.assign(x, nextDue(x))).filter(x => x.date <= endStr && x.date >= shiftMonth(todayStr.slice(0, 7), -1) + "-01");
+        if (due.length){
+          const tot = due.reduce((a, x) => a + x.amt, 0);
+          fact("Bills coming up", [`Still to pay before ${fmtDay(info.end)}: `, { b: due.map(x => x.name).join(", ") }, tot ? `, about ${peso(tot)} in total.` : "."]);
+        }
+      }
+
+      // 7. Credit cards
       const onCards = sumOf(exp.filter(isCardPay));
-      if (onCards > 0) fact("Credit cards", [{ b: peso(onCards) }, ` (${pct(onCards, spent)}%) of ${mPoss} spending went on credit cards. That's what to set aside for the bills.`]);
+      if (onCards > 0){
+        const unpaid = cardsList().reduce((a, c) => a + cardOwed(c.id), 0);
+        fact("Credit cards", [{ b: peso(onCards) }, ` (${pct(onCards, spent)}%) of ${mPoss} spending went on credit cards.`, unpaid ? " Still unpaid across your cards: " : " Every card is paid up.", unpaid ? { b: peso(unpaid) } : "", unpaid ? "." : ""]);
+      }
     }
 
     // Where it went: donut + legend (top 7 categories, the rest folded into Other)
@@ -897,7 +1048,8 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
       $("iDonut").innerHTML = `<svg viewBox="0 0 200 200" role="img" aria-label="Spending by category">${segs}<text x="100" y="98" text-anchor="middle" font-size="22" font-weight="800">${pct(rows[0].v, spent)}%</text><text class="dsub" x="100" y="120" text-anchor="middle" font-size="11"></text></svg>`;
       $("iDonut").querySelector(".dsub").textContent = rows[0].c.length > 18 ? rows[0].c.slice(0, 17) + "…" : rows[0].c;
       const lg = $("iLegend"); lg.textContent = "";
-      rows.forEach(r => { const row = el("div", "lrow"), sw = el("i"); sw.style.background = r.col; row.append(sw, el("span", "ln", r.c), el("span", "la", peso(r.v)), el("span", "lp", pct(r.v, spent) + "%")); lg.append(row); });
+      const fs = fixedSet();
+      rows.forEach(r => { const row = el("div", "lrow"), sw = el("i"), ln = el("span", "ln", r.c); sw.style.background = r.col; if (fs.has(r.c)) ln.append(el("span", "fx", " · fixed")); row.append(sw, ln, el("span", "la", peso(r.v)), el("span", "lp", pct(r.v, spent) + "%")); lg.append(row); });
     }
 
     // Last 6 months trend (current month shown lighter, marked "so far")
@@ -936,7 +1088,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
   /* ---------- Sheets ---------- */
   let openSheet = null;
   function show(id){ const keep = editId; hide(); editId = keep; openSheet = $(id); $("scrim").hidden = false; openSheet.hidden = false; }
-  function hide(){ if (openSheet) openSheet.hidden = true; $("scrim").hidden = true; openSheet = null; editId = null; }
+  function hide(){ if (openSheet) openSheet.hidden = true; $("scrim").hidden = true; openSheet = null; editId = null; billCtx = null; }
   $("scrim").onclick = hide;
   document.addEventListener("keydown", e => { if (e.key === "Escape") hide(); });
 
@@ -1053,7 +1205,14 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
   $("quickCatAdd").onclick = quickAdd;
   $("quickCatName").addEventListener("keydown", e => { if (e.key === "Enter"){ e.preventDefault(); quickAdd(); } });
 
-  let editId = null, delArmed = null;
+  let editId = null, delArmed = null, billCtx = null;
+  function recordBill(b, ym){
+    $("addBtn").onclick();
+    billCtx = { id: b.id, ym };
+    if (b.amount) $("amt").value = String(b.amount);
+    $("note").value = b.name; if (b.cat && expCats().includes(b.cat)) cat = b.cat;
+    drawChips(); $("addTitle").textContent = "Record " + b.name;
+  }
   function sheetMode(){
     $("addTitle").textContent = editId ? "Edit entry" : "New entry";
     $("saveBtn").textContent = editId ? "Save changes" : "Save";
@@ -1080,7 +1239,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
   };
 
   $("addBtn").onclick = () => {
-    editId = null; sheetMode();
+    editId = null; billCtx = null; sheetMode();
     type = "expense"; $("quickCat").hidden = true; $("quickCatErr").hidden = true;
     $("amt").value = ""; $("note").value = "";
     $("date").value = view.month === curPeriod() ? today() : periodStart(view.month);
@@ -1108,7 +1267,9 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
     const t = { id: newId(), type, amount, cat, note: $("note").value.trim(), date, ts: now, by: setup.name || "", pay: type === "expense" ? pay : "", mtime: now, deleted: 0 };
     data.tx[t.id] = t; markPending(t.id);
     if (!save()){ delete data.tx[t.id]; data.pending = data.pending.filter(x => x !== t.id); return; }
+    const bc = billCtx;
     hide(); view.month = periodOf(date); render(); scheduleSync();
+    if (bc && type === "expense") markPaid(bc.ym, bc.id, amount);
     const card = type === "expense" && cardById(pay);
     toast(type === "expense" ? `Logged ${peso(amount)} for ${cat}${card ? " on " + card.name : ""}` : `Added ${peso(amount)} income`);
   });
@@ -1120,13 +1281,17 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
   function drawBudgetSheet(){
     const box = $("bset"); box.textContent = "";
     work.exp.forEach((c, i) => {
-      const l = el("label", null, c); l.htmlFor = "b" + i;
+      const nmw = el("div", "bname"), l = el("label", null, c); l.htmlFor = "b" + i;
+      const fx = work.fixed.has(c), kb = el("button", "kind", fx ? "Fixed" : "Flexible"); kb.type = "button"; kb.setAttribute("aria-pressed", String(fx));
+      kb.setAttribute("aria-label", `${c}: ${fx ? "fixed" : "flexible"} cost. Tap to change.`);
+      kb.onclick = () => { readAmounts(); fx ? work.fixed.delete(c) : work.fixed.add(c); drawBudgetSheet(); };
+      nmw.append(l, kb);
       const inp = document.createElement("input"); inp.id = "b" + i; inp.inputMode = "numeric"; inp.placeholder = "No limit";
       inp.dataset.cat = c; inp.value = work.amt[c] || "";
       const rm = el("button", "rm", "✕"); rm.type = "button"; rm.setAttribute("aria-label", "Remove " + c);
       rm.disabled = work.exp.length <= 1;
       rm.onclick = () => { readAmounts(); work.exp = work.exp.filter(x => x !== c); drawBudgetSheet(); };
-      box.append(l, inp, rm);
+      box.append(nmw, inp, rm);
     });
     const ib = $("incset"); ib.textContent = "";
     work.inc.forEach(c => {
@@ -1149,7 +1314,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
 
   $("editBudgets").onclick = () => {
     const amt = {}; Object.keys(data.budgets).forEach(k => { if (!k.startsWith("__")) amt[k] = String(data.budgets[k]); });
-    work = { exp: [...expCats()], inc: [...incCats()], amt };
+    work = { exp: [...expCats()], inc: [...incCats()], amt, fixed: new Set([...fixedSet()].filter(c => expCats().includes(c))) };
     $("newExp").value = ""; $("newInc").value = ""; $("catErr").hidden = true;
     drawBudgetSheet(); show("budgetSheet");
   };
@@ -1158,7 +1323,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
     readAmounts();
     const b = {};
     Object.keys(data.budgets).forEach(k => { if (k.startsWith("__")) b[k] = data.budgets[k]; });
-    b.__exp = work.exp; b.__inc = work.inc;
+    b.__exp = work.exp; b.__inc = work.inc; b.__fixed = work.exp.filter(c => work.fixed.has(c));
     work.exp.forEach(c => { const v = parseFloat(String(work.amt[c] || "").replace(/[,₱\s]/g, "")); if (v > 0) b[c] = Math.round(v); });
     commitBudgets(b); hide(); toast("Saved");
   });
@@ -1168,7 +1333,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
   function readCards(){
     $("cardset").querySelectorAll(".cardedit").forEach(r => {
       const c = cardWork.find(x => x.id === r.dataset.id);
-      if (c){ c.name = r.querySelector(".nm").value; c.use = r.querySelector(".use").value; }
+      if (c){ c.name = r.querySelector(".nm").value; c.use = r.querySelector(".use").value; c.due = r.querySelector(".due").value; }
     });
   }
   function drawCardSheet(){
@@ -1180,11 +1345,14 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
       const use = document.createElement("input"); use.className = "use"; use.id = "cu" + i; use.maxLength = 40; use.placeholder = "Used for, e.g. Groceries"; use.value = c.use || ""; use.setAttribute("aria-label", "What this card is for");
       const rm = el("button", "rm", "✕"); rm.type = "button"; rm.setAttribute("aria-label", "Remove " + (c.name || "card"));
       rm.onclick = () => { readCards(); cardWork = cardWork.filter(x => x.id !== c.id); drawCardSheet(); };
-      r.append(nm, rm, use); box.append(r);
+      const dr = el("label", "duerow", "Bill due day (optional)"); dr.htmlFor = "cd" + i;
+      const due = document.createElement("input"); due.className = "due"; due.id = "cd" + i; due.type = "number"; due.inputMode = "numeric"; due.min = "1"; due.max = "31"; due.placeholder = "e.g. 25"; due.value = c.due || "";
+      dr.append(due);
+      r.append(nm, rm, use, dr); box.append(r);
     });
   }
   function openCards(){
-    cardWork = cardsList().map(c => ({ id: c.id, name: c.name, use: c.use || "" }));
+    cardWork = cardsList().map(c => ({ id: c.id, name: c.name, use: c.use || "", due: Number.isInteger(c.due) ? String(c.due) : "", since: c.since }));
     if (!cardWork.length) cardWork.push({ id: newId(), name: "", use: "" });
     $("cardErr").hidden = true; drawCardSheet(); show("cardSheet");
   }
@@ -1202,10 +1370,87 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
       if (!String(c.name).trim() && !String(c.use).trim()) continue;
       const [name, msg] = cleanCardName(c.name, out, c.id);
       if (!name){ err.textContent = msg; err.hidden = false; return; }
-      out.push({ id: c.id, name, use: String(c.use).trim().slice(0, 40) });
+      const dueStr = String(c.due || "").trim(), due = Number(dueStr);
+      if (dueStr && (!Number.isInteger(due) || due < 1 || due > 31)){ err.textContent = `Set a due day from 1 to 31 for ${name}, or leave it blank.`; err.hidden = false; return; }
+      const prev = cardById(c.id), card = { id: c.id, name, use: String(c.use).trim().slice(0, 40) };
+      if (dueStr){ card.due = due; card.since = prev && prev.due === due && prev.since ? prev.since : sinceFor(due); }
+      out.push(card);
     }
     commitBudgets(Object.assign({}, data.budgets, { __cards: out }));
     hide(); toast("Cards saved");
+  });
+
+  /* ---------- Pay card bill ---------- */
+  let payCtx = null;
+  function openPay(card, ym){
+    const owed = cardOwed(card.id);
+    payCtx = { id: card.id, ym, name: card.name };
+    $("pTitle").textContent = "Pay " + card.name;
+    $("payInfo").textContent = owed ? `Unpaid on this card: ${peso(owed)}. Enter what you paid.` : "Nothing unpaid on this card right now. Enter what you paid.";
+    $("payAmt").value = owed ? String(owed) : ""; $("payErr").hidden = true;
+    show("paySheet");
+  }
+  $("payForm").addEventListener("submit", e => {
+    e.preventDefault();
+    const amount = Math.round(parseFloat(($("payAmt").value || "").replace(/[,₱\s]/g, "")) * 100) / 100;
+    if (!(amount > 0)){ $("payErr").textContent = "Enter an amount greater than zero."; $("payErr").hidden = false; return; }
+    const c = payCtx; hide(); markPaid(c.ym, c.id, amount); toast(`Marked ${peso(amount)} paid on ${c.name}`);
+  });
+
+  /* ---------- Bills manager ---------- */
+  let billWork = null;
+  function readBills(){
+    $("billset").querySelectorAll(".billedit").forEach(r => {
+      const b = billWork.find(x => x.id === r.dataset.id); if (!b) return;
+      b.name = r.querySelector(".nm").value; b.amount = r.querySelector(".am").value; b.due = r.querySelector(".dd").value; b.cat = r.querySelector(".ct").value;
+    });
+  }
+  function drawBillSheet(){
+    const box = $("billset"); box.textContent = "";
+    if (!billWork.length) box.append(el("p", "muted", "No bills yet. Tap Add bill to start."));
+    billWork.forEach((b, i) => {
+      const r = el("div", "billedit"); r.dataset.id = b.id;
+      const nm = document.createElement("input"); nm.className = "nm"; nm.id = "bln" + i; nm.maxLength = 30; nm.placeholder = "Bill name, e.g. Meralco"; nm.value = b.name || ""; nm.setAttribute("aria-label", "Bill name");
+      const rm = el("button", "rm", "✕"); rm.type = "button"; rm.setAttribute("aria-label", "Remove " + (b.name || "bill"));
+      rm.onclick = () => { readBills(); billWork = billWork.filter(x => x.id !== b.id); drawBillSheet(); };
+      const two = el("div", "two");
+      const am = document.createElement("input"); am.className = "am"; am.id = "bla" + i; am.inputMode = "decimal"; am.placeholder = "Usual amount"; am.value = b.amount || ""; am.setAttribute("aria-label", "Usual amount");
+      const dd = document.createElement("input"); dd.className = "dd"; dd.id = "bld" + i; dd.type = "number"; dd.inputMode = "numeric"; dd.min = "1"; dd.max = "31"; dd.placeholder = "Due day (1–31)"; dd.value = b.due || ""; dd.setAttribute("aria-label", "Due day of the month");
+      two.append(am, dd);
+      const ct = document.createElement("select"); ct.className = "ct full"; ct.id = "blc" + i; ct.setAttribute("aria-label", "Category");
+      expCats().forEach(c => { const o = document.createElement("option"); o.value = c; o.textContent = c; ct.append(o); });
+      ct.value = b.cat && expCats().includes(b.cat) ? b.cat : (expCats().includes("Bills") ? "Bills" : expCats()[0]);
+      r.append(nm, rm, two, ct); box.append(r);
+    });
+  }
+  function openBills(){
+    billWork = billsList().map(b => Object.assign({}, b, { amount: b.amount ? String(b.amount) : "", due: String(b.due) }));
+    if (!billWork.length) billWork.push({ id: newId(), name: "", amount: "", due: "", cat: "" });
+    $("billErr").hidden = true; drawBillSheet(); show("billSheet");
+  }
+  $("manageBills").onclick = openBills;
+  $("addBillRow").onclick = () => {
+    readBills();
+    if (billWork.length >= MAX_BILLS){ $("billErr").textContent = `You can have up to ${MAX_BILLS} bills.`; $("billErr").hidden = false; return; }
+    billWork.push({ id: newId(), name: "", amount: "", due: "", cat: "" }); drawBillSheet();
+    const ins = $("billset").querySelectorAll(".nm"); ins[ins.length - 1].focus();
+  };
+  $("billForm").addEventListener("submit", e => {
+    e.preventDefault(); readBills();
+    const out = [], err = $("billErr"), old = billsList();
+    for (const b of billWork){
+      const name = String(b.name || "").trim().replace(/\s+/g, " ");
+      if (!name && !String(b.amount).trim() && !String(b.due).trim()) continue;
+      if (!name){ err.textContent = "Give each bill a name."; err.hidden = false; return; }
+      if (out.some(x => x.name.toLowerCase() === name.toLowerCase())){ err.textContent = `"${name}" is listed twice.`; err.hidden = false; return; }
+      const due = Number(b.due);
+      if (!Number.isInteger(due) || due < 1 || due > 31){ err.textContent = `Set a due day from 1 to 31 for ${name}.`; err.hidden = false; return; }
+      const amount = Math.round((parseFloat(String(b.amount).replace(/[,₱\s]/g, "")) || 0) * 100) / 100;
+      const prev = old.find(x => x.id === b.id);
+      out.push({ id: b.id, name: name.slice(0, 30), amount: amount > 0 ? amount : 0, due, cat: b.cat, since: prev && prev.due === due && prev.since ? prev.since : sinceFor(due) });
+    }
+    commitBudgets(Object.assign({}, data.budgets, { __bills: out }));
+    hide(); toast("Bills saved");
   });
 
   /* ---------- Household setup ---------- */
