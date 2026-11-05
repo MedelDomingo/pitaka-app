@@ -174,6 +174,18 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
 .bsum strong{display:block;font-size:1.1rem;font-weight:700}
 .bsum .sv strong{color:var(--accent)} .bsum .ov strong{color:var(--bad)}
 .bsum .zero strong{color:var(--muted)}
+.daily{display:flex;flex-direction:column;gap:10px}
+.dcard{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:10px}
+.dcard .dh{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.dcard .dn{font-weight:700;min-width:0;overflow-wrap:anywhere}
+.dcard .dl{font-family:var(--display);font-weight:800;font-size:1.5rem;color:var(--accent);white-space:nowrap}
+.dcard .dl small{font-family:var(--body);font-size:.8rem;font-weight:600;color:var(--muted)}
+.dcard .dl.bad{color:var(--bad)}
+.dstats{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.dstats div{background:var(--bg);border-radius:10px;padding:8px 10px}
+.dstats strong{display:block;font-weight:700}
+.dtoday{font-size:.85rem;color:var(--muted)}
+.dtoday b{color:var(--ink)} .dtoday.bad, .dtoday.bad b{color:var(--bad)}
 .cardset{display:flex;flex-direction:column;gap:12px}
 .cardedit{display:grid;grid-template-columns:minmax(0,1fr) 40px;gap:8px;padding:12px;border:1px solid var(--line);border-radius:14px;background:var(--bg)}
 .cardedit input{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:10px;padding:10px;font:inherit;font-size:16px;width:100%;min-width:0}
@@ -214,6 +226,11 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
     </div>
   </section>
 
+
+  <section id="dailySec" hidden>
+    <div class="sec-h"><h2>Daily allowance</h2><span class="label" id="dailyNote"></span></div>
+    <div class="daily" id="daily"></div>
+  </section>
 
   <section>
     <div class="sec-h"><h2>Budgets</h2><button class="link" id="editBudgets">Edit budgets</button></div>
@@ -552,6 +569,38 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
       o.append(el("span", "label", "Over budget"), el("strong", null, peso(over)));
       sum.append(a, o);
     }
+
+    // Daily allowance: for budgeted categories with "allowance" in the name, in the current period only.
+    // The daily limit is set at the start of the day: (budget − spent before today) ÷ days left including today.
+    const dsec = $("dailySec"), dbox = $("daily"); dbox.textContent = "";
+    const tdy = today(), [ty, tm, td] = tdy.split("-").map(Number), [ny, nm] = shiftMonth(view.month, 1).split("-").map(Number);
+    // Last day of this period is the 14th of next month; count days left including today.
+    const daysLeft = Math.round((Date.UTC(ny, nm - 1, PERIOD_START - 1) - Date.UTC(ty, tm - 1, td)) / 864e5) + 1;
+    const allowCats = view.month === curMonth ? cats.filter(c => /allowance/i.test(c) && data.budgets[c] > 0) : [];
+    dsec.hidden = !allowCats.length;
+    if (allowCats.length) $("dailyNote").textContent = `${daysLeft} ${daysLeft === 1 ? "day" : "days"} left`;
+    allowCats.forEach(c => {
+      const bud = data.budgets[c];
+      const mine = list.filter(t => t.type === "expense" && t.cat === c);
+      const spentAll = mine.reduce((a, t) => a + t.amount, 0), spentToday = mine.filter(t => t.date === tdy).reduce((a, t) => a + t.amount, 0);
+      const remaining = Math.round((bud - spentAll) * 100) / 100;
+      const startOfDay = bud - (spentAll - spentToday);
+      const perDay = startOfDay > 0 ? Math.floor(startOfDay / daysLeft) : 0;
+      const leftToday = Math.round((perDay - spentToday) * 100) / 100;
+      const card = el("div", "dcard"), head = el("div", "dh"), lim = el("span", "dl" + (perDay ? "" : " bad"));
+      lim.append(peso(perDay), el("small", null, " / day"));
+      head.append(el("span", "dn", c), lim);
+      const st = el("div", "dstats"), a = el("div"), b2 = el("div");
+      a.append(el("span", "label", "Remaining budget"), el("strong", null, peso(remaining)));
+      b2.append(el("span", "label", "Days remaining"), el("strong", null, String(daysLeft)));
+      st.append(a, b2);
+      const td2 = el("div", "dtoday" + (leftToday < 0 ? " bad" : ""));
+      if (!perDay) td2.append("No budget left for the rest of this month.");
+      else if (leftToday < 0) td2.append("Today: ", el("b", null, peso(spentToday)), " spent, ", el("b", null, peso(-leftToday)), " over today's limit");
+      else td2.append("Today: ", el("b", null, peso(spentToday)), " spent, ", el("b", null, peso(leftToday)), " left for today");
+      card.append(head, st, td2);
+      dbox.append(card);
+    });
 
     const bx = $("budgets"); bx.textContent = "";
     if (!cats.length){
