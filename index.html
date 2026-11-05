@@ -177,6 +177,8 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
 .bsum .sv strong{color:var(--accent)} .bsum .ov strong{color:var(--bad)}
 .bsum .zero strong{color:var(--muted)}
 .daily{display:flex;flex-direction:column;gap:10px}
+.asave{display:flex;flex-direction:column;gap:10px}
+.asave .fact{list-style:none}
 .bills{background:var(--surface);border:1px solid var(--line);border-radius:16px;overflow:hidden}
 .bill{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 12px;align-items:center;padding:12px 14px;border-top:1px solid var(--line)}
 .bill:first-child{border-top:0}
@@ -298,6 +300,11 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
   <section id="dailySec" hidden>
     <div class="sec-h"><h2>Daily allowance</h2><span class="label" id="dailyNote"></span></div>
     <div class="daily" id="daily"></div>
+  </section>
+
+  <section id="asaveSec" hidden>
+    <div class="sec-h"><h2>Allowance savings</h2></div>
+    <div class="asave" id="asave"></div>
   </section>
 
   <section>
@@ -564,6 +571,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
   const curPeriod = () => periodOf(today());
   const inPeriod = (d, ym) => !!d && /^\d{4}-\d{2}-\d{2}$/.test(d) && periodOf(d) === ym;
   const periodStart = ym => `${ym}-${pad(PERIOD_START)}`;
+  function fmtEnd(ym){ const [y, m] = shiftMonth(ym, 1).split("-").map(Number); return new Date(y, m - 1, PERIOD_START - 1).toLocaleDateString("en-PH", { month: "short", day: "numeric" }); }
   function periodRange(ym){
     const [y, m] = ym.split("-").map(Number), f = { month: "short", day: "numeric" };
     return `${new Date(y, m - 1, PERIOD_START).toLocaleDateString("en-PH", f)} – ${new Date(y, m, PERIOD_START - 1).toLocaleDateString("en-PH", f)}`;
@@ -748,6 +756,45 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
       card.append(head, st, td2);
       dbox.append(card);
     });
+
+    // Allowance savings: what's left of each allowance budget in a month becomes next month's reward.
+    const asec = $("asaveSec"), abox = $("asave"); abox.textContent = "";
+    const aCats = [...new Set([...expCats(), ...Object.keys(data.budgets).filter(k => !k.startsWith("__"))])].filter(c => /allowance/i.test(c) && data.budgets[c] > 0);
+    const allowTx = live().filter(t => t.type === "expense" && aCats.includes(t.cat) && /^\d{4}-\d{2}-\d{2}$/.test(t.date || ""));
+    const firstMonth = allowTx.length ? allowTx.map(t => periodOf(t.date)).sort()[0] : null;
+    const allowResult = ym => {
+      const rows = aCats.map(c => { const sp = allowTx.filter(t => t.cat === c && inPeriod(t.date, ym)).reduce((a, t) => a + t.amount, 0); return { c, diff: Math.round(data.budgets[c] - sp) }; });
+      return { rows, total: rows.reduce((a, r) => a + r.diff, 0) };
+    };
+    const signedP = n => (n > 0 ? "+" : n < 0 ? "−" : "") + peso(Math.abs(n));
+    const mLong = ym => { const [y, m] = ym.split("-").map(Number); return new Date(y, m - 1, 1).toLocaleDateString("en-PH", { month: "long" }); };
+    const box2 = (tag, value, sub, tone, rows) => {
+      const d = el("div", "fact" + (tone ? " " + tone : "")); d.append(el("span", "tag", tag));
+      if (value) d.append(el("span", "fv", value));
+      (rows || []).forEach(r => { const row = el("div", "frow" + (r.tone ? " " + r.tone : "")); row.append(el("span", null, r.label), el("b", null, r.val)); d.append(row); });
+      if (sub) d.append(el("span", "fs", sub));
+      abox.append(d);
+    };
+    asec.hidden = !aCats.length || !firstMonth || view.month < firstMonth || view.month > curMonth;
+    if (!asec.hidden){
+      const prevM = shiftMonth(view.month, -1);
+      // Reward from last month
+      if (prevM >= firstMonth){
+        const r = allowResult(prevM), reward = Math.max(0, r.total);
+        const rRows = r.rows.map(x => ({ label: x.c, val: signedP(x.diff), tone: x.diff >= 0 ? "good" : "bad" }));
+        const rewardCats = expCats().filter(c => /reward/i.test(c));
+        if (rewardCats.length){
+          const used = live().filter(t => t.type === "expense" && rewardCats.includes(t.cat) && inPeriod(t.date, view.month)).reduce((a, t) => a + t.amount, 0);
+          rRows.push({ label: "Used on rewards", val: peso(used) }, { label: "Reward left", val: peso(Math.max(0, reward - used)), tone: reward - used >= 0 ? "good" : "bad" });
+        }
+        box2(`Reward for ${mLong(view.month)}`, peso(reward), r.total < 0 ? `${mLong(prevM)} allowances went over, so there's no reward this time` : `Saved from ${mLong(prevM)} allowances`, reward > 0 ? "good" : null, rRows);
+      }
+      // This month's savings so far (or final, for a past month)
+      const cur = allowResult(view.month), isNow = view.month === curMonth;
+      box2(isNow ? `Saving so far in ${mLong(view.month)}` : `Saved in ${mLong(view.month)}`, signedP(cur.total),
+        isNow ? `Unused allowance. This becomes next month's reward after ${fmtEnd(view.month)}.` : "",
+        cur.total >= 0 ? "good" : "bad", cur.rows.map(x => ({ label: x.c, val: signedP(x.diff), tone: x.diff >= 0 ? "good" : "bad" })));
+    }
 
     const bx = $("budgets"); bx.textContent = "";
     if (!cats.length){
